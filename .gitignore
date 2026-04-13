@@ -1,0 +1,11 @@
+.DS_Store
+
+dist/
+release/
+
+src/bin/
+src/obj/
+
+.vscode/
+*.user
+*.suo
