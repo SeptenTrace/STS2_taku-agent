@@ -1,7 +1,11 @@
 {
-  "pck_name": "taku_agent",
+  "id": "taku_agent",
   "name": "STS2 Taku Agent",
   "author": "Retr0",
   "description": "Starter scaffold for a Slay the Spire 2 mod.",
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "has_pck": true,
+  "has_dll": true,
+  "dependencies": [],
+  "affects_gameplay": true
 }

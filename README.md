@@ -1,6 +1,11 @@
 # STS2 Taku Agent
 
-Starter repository for a Slay the Spire 2 mod.
+Starter repository for a Slay the Spire 2 mod focused on building an AI-playable interface for Slay the Spire 2.
+
+## Planning Docs
+- `docs/overall-plan.md`: project roadmap across the three major phases
+- `docs/phase-1-observer.md`: detailed plan for building the game-state observation layer
+- `docs/feasibility/README.md`: feasibility assessment for the three planned phases
 
 ## Repository Layout
 - `src/`: C# mod source
@@ -9,10 +14,35 @@ Starter repository for a Slay the Spire 2 mod.
 - `build_and_deploy.sh`: build locally and copy outputs into the game `mods` folder
 - `build_release.sh`: build a shareable release package
 
+## Current Phase 1 Status
+The repository now includes a working battle-state capture pipeline for in-combat observation.
+
+Currently verified fields:
+- Player role / character type
+- Player HP, max HP, block, energy, max energy, stars
+- Player status effects with title, amount, description, and category
+- Enemy HP, max HP, block, alive/hittable state, buffs/debuffs, and current intent summary
+- Hand, draw pile, discard pile, and exhaust pile contents
+- Card title, description, type, rarity, target type, resolved energy cost, X-cost flag, star cost, upgrade state, and keywords
+- Potion title, usage, target type, rarity, and effect description
+- Relic title, rarity, counter, and effect description
+
+Current capture triggers:
+- `combat_setup`
+- `after_player_turn_start`
+
+Snapshot output path on macOS:
+- `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/`
+
 ## Build For Local macOS Game
 ```bash
 ./build_and_deploy.sh
 ```
+
+This deploys the mod into `mods/taku_agent/` with:
+- `mod_manifest.json`
+- `taku_agent.pck`
+- `taku_agent.dll`
 
 ## Build Release Package
 ```bash

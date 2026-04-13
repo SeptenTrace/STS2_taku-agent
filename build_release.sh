@@ -9,11 +9,11 @@ TOOLS_DIR="$REPO_ROOT/tools"
 RELEASE_DIR="$REPO_ROOT/release"
 
 MANIFEST_PATH="$PACK_DIR/mod_manifest.json"
-MOD_ID="$(sed -n 's/.*"pck_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST_PATH" | head -n 1)"
+MOD_ID="$(sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST_PATH" | head -n 1)"
 MOD_VERSION="$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$MANIFEST_PATH" | head -n 1)"
 
 if [[ -z "${MOD_ID:-}" || -z "${MOD_VERSION:-}" ]]; then
-  echo "Failed to parse pck_name/version from $MANIFEST_PATH"
+  echo "Failed to parse id/version from $MANIFEST_PATH"
   exit 1
 fi
 
@@ -53,12 +53,13 @@ echo "Packing PCK..."
 "$STS2_ENGINE_BIN" --headless --script "$TOOLS_DIR/build_pck.gd" -- "$PACK_DIR" "$DIST_DIR/${MOD_ID}.pck"
 
 PACKAGE_STAGING="$RELEASE_DIR/${MOD_ID}-v${MOD_VERSION}"
+PACKAGE_MOD_DIR="$PACKAGE_STAGING/$MOD_ID"
 rm -rf "$PACKAGE_STAGING"
-mkdir -p "$PACKAGE_STAGING"
+mkdir -p "$PACKAGE_MOD_DIR"
 
-cp -f "$DIST_DIR/${MOD_ID}.pck" "$PACKAGE_STAGING/${MOD_ID}.pck"
-cp -f "$SRC_DIR/bin/Release/net9.0/${MOD_ID}.dll" "$PACKAGE_STAGING/${MOD_ID}.dll"
-cp -f "$PACK_DIR/mod_manifest.json" "$PACKAGE_STAGING/mod_manifest.json"
+cp -f "$DIST_DIR/${MOD_ID}.pck" "$PACKAGE_MOD_DIR/${MOD_ID}.pck"
+cp -f "$SRC_DIR/bin/Release/net9.0/${MOD_ID}.dll" "$PACKAGE_MOD_DIR/${MOD_ID}.dll"
+cp -f "$PACK_DIR/mod_manifest.json" "$PACKAGE_MOD_DIR/mod_manifest.json"
 cp -f "$REPO_ROOT/INSTALL.md" "$PACKAGE_STAGING/INSTALL.md"
 
 ZIP_PATH="$DIST_DIR/${MOD_ID}-v${MOD_VERSION}-universal.zip"
