@@ -30,9 +30,13 @@ Currently verified fields:
 Current capture triggers:
 - `combat_setup`
 - `after_player_turn_start`
+- `after_card_played`
 
 Snapshot output path on macOS:
 - `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/`
+
+Action history output:
+- `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/action-history.jsonl`
 
 ## Build For Local macOS Game
 ```bash

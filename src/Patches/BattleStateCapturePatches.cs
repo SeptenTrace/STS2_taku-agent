@@ -1,7 +1,10 @@
 using System.Threading.Tasks;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Combat;
+using MegaCrit.Sts2.Core.Entities.Cards;
 using MegaCrit.Sts2.Core.Entities.Players;
+using MegaCrit.Sts2.Core.GameActions.Multiplayer;
+using MegaCrit.Sts2.Core.Hooks;
 using TakuAgentMod.Diagnostics;
 
 namespace TakuAgentMod.Patches;
@@ -29,5 +32,22 @@ internal static class BattleStateCapturePatches
 
         CombatState? state = player.Creature?.CombatState ?? CombatManager.Instance?.DebugOnlyGetState();
         BattleStateCaptureService.CaptureSnapshot("after_player_turn_start", state, player);
+    }
+
+    [HarmonyPatch(typeof(Hook), nameof(Hook.AfterCardPlayed))]
+    [HarmonyPostfix]
+    private static void AfterCardPlayed(
+        CombatState combatState,
+        PlayerChoiceContext choiceContext,
+        CardPlay cardPlay,
+        ref Task __result)
+    {
+        __result = WrapAfterCardPlayed(__result, combatState, cardPlay);
+    }
+
+    private static async Task WrapAfterCardPlayed(Task originalTask, CombatState combatState, CardPlay cardPlay)
+    {
+        await originalTask.ConfigureAwait(false);
+        BattleStateCaptureService.CaptureCardPlayed(combatState, cardPlay);
     }
 }

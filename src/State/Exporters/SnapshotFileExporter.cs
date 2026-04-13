@@ -15,7 +15,7 @@ internal sealed class SnapshotFileExporter
     private readonly object _sync = new();
     private int _snapshotSequence;
 
-    public string OutputDirectory => GetOutputDirectory();
+    public string OutputDirectory => GetOutputDirectoryPath();
 
     public void Log(string message)
     {
@@ -23,14 +23,14 @@ internal sealed class SnapshotFileExporter
         {
             string line = $"[{DateTimeOffset.Now:O}] {message}{Environment.NewLine}";
             Console.Write(line);
-            File.AppendAllText(Path.Combine(GetOutputDirectory(), "phase1.log"), line);
+            File.AppendAllText(Path.Combine(GetOutputDirectoryPath(), "phase1.log"), line);
         }
     }
 
     public string WriteSnapshot(BattleSnapshot snapshot)
     {
         string filePath = Path.Combine(
-            GetOutputDirectory(),
+            GetOutputDirectoryPath(),
             $"{DateTime.Now:yyyyMMdd-HHmmss-fff}_{Interlocked.Increment(ref _snapshotSequence):D4}_{Sanitize(snapshot.Trigger)}.json");
 
         string json = JsonSerializer.Serialize(snapshot, JsonOptions);
@@ -42,7 +42,7 @@ internal sealed class SnapshotFileExporter
         return filePath;
     }
 
-    private static string GetOutputDirectory()
+    internal static string GetOutputDirectoryPath()
     {
         string baseDirectory = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         if (string.IsNullOrWhiteSpace(baseDirectory))
