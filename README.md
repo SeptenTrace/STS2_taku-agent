@@ -16,6 +16,8 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `tools/`: helper scripts for packaging
 - `tools/sts-cli/`: TypeScript implementation of the repo-local CLI
 - `build_and_deploy.sh`: build locally and copy outputs into the game `mods` folder
+- `restart_game.sh`: stop and relaunch the local macOS game client, optionally waiting for the observer server
+- `dev_cycle.sh`: build, deploy, restart, wait for the observer server, and optionally run smoke checks
 - `build_release.sh`: build a shareable release package
 
 ## Current Status
@@ -178,6 +180,11 @@ Higher-level CLI helpers:
 - `./sts exec ACTION ... --wait-for CONDITION` executes an action and then blocks until the requested stable follow-up state is reached
 - `./sts rewards claim-all-safe` automatically claims deterministic non-card rewards and stops before card choice
 
+Local development helpers:
+- `./restart_game.sh --wait-for-server` restarts the game and waits for the observer server to respond
+- `./dev_cycle.sh` runs the full build -> deploy -> restart -> wait loop
+- `./dev_cycle.sh --smoke` adds a basic `./sts ping`, `./sts context`, and `./sts actions` verification pass after restart
+
 Transition handling:
 - `./sts context` is the first place to check whether a screen is actionable
 - if `isTransitioning=true`, treat the current frame as non-actionable and wait
@@ -267,6 +274,39 @@ This deploys the mod into `mods/taku_agent/` with:
 - `mod_manifest.json`
 - `taku_agent.pck`
 - `taku_agent.dll`
+
+## Restart Local Game
+```bash
+./restart_game.sh --wait-for-server
+```
+
+Useful options:
+- `--server-timeout 120`
+- `--no-force-kill`
+
+Environment overrides:
+- `STS2_APP_PATH`
+- `STS2_GAME_BIN`
+- `STS_OBSERVER_URL`
+- `STS2_STEAM_APP_ID`
+- `STS2_LAUNCH_DIRECT=1`
+
+By default `restart_game.sh` launches the game through Steam with `steam://run/2868840`, which avoids Steam session and ownership errors that can happen when opening the `.app` bundle directly.
+
+## Full Development Cycle
+```bash
+./dev_cycle.sh
+```
+
+Optional smoke run:
+```bash
+./dev_cycle.sh --smoke
+```
+
+Useful options:
+- `--server-timeout 120`
+- `--skip-build`
+- `--skip-restart`
 
 ## Build Release Package
 ```bash
