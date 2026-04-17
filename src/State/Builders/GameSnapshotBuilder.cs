@@ -88,6 +88,7 @@ internal sealed class GameSnapshotBuilder
         bool mapIsOpen = NMapScreen.Instance is { IsOpen: true };
 
         string stateType = "unknown";
+        string? contextOverlayType = null;
         CardSelectionStateSnapshot? cardSelection = null;
         CardRewardStateSnapshot? cardReward = null;
         RewardsStateSnapshot? rewards = null;
@@ -102,21 +103,25 @@ internal sealed class GameSnapshotBuilder
         if (topOverlay is NCardGridSelectionScreen gridSelection)
         {
             stateType = "card_select";
+            contextOverlayType = gridSelection.GetType().Name;
             cardSelection = BuildCardGridSelectionState(gridSelection);
         }
         else if (topOverlay is NChooseACardSelectionScreen chooseCardSelection)
         {
             stateType = "card_select";
+            contextOverlayType = chooseCardSelection.GetType().Name;
             cardSelection = BuildChooseCardSelectionState(chooseCardSelection);
         }
         else if (!mapIsOpen && topOverlay is NCardRewardSelectionScreen cardRewardSelection)
         {
             stateType = "card_reward";
+            contextOverlayType = cardRewardSelection.GetType().Name;
             cardReward = BuildCardRewardState(cardRewardSelection);
         }
         else if (!mapIsOpen && topOverlay is NRewardsScreen rewardsScreen)
         {
             stateType = "rewards";
+            contextOverlayType = rewardsScreen.GetType().Name;
             rewards = BuildRewardsState(rewardsScreen);
         }
         else if (currentRoom is CombatRoom combatRoom && CombatManager.Instance.IsInProgress)
@@ -152,12 +157,13 @@ internal sealed class GameSnapshotBuilder
         else if (topOverlay is IOverlayScreen overlayScreen)
         {
             stateType = "overlay";
+            contextOverlayType = overlayScreen.GetType().Name;
             overlay = new OverlayStateSnapshot(
                 ScreenType: overlayScreen.GetType().Name,
                 Message: $"Unhandled overlay: {overlayScreen.GetType().Name}");
         }
 
-        ContextSnapshot context = BuildContext(stateType, currentRoom?.RoomType.ToString(), topOverlay?.GetType().Name);
+        ContextSnapshot context = BuildContext(stateType, currentRoom?.RoomType.ToString(), contextOverlayType);
         CompactObservationSnapshot compactObservation = BuildCompactObservation(
             context,
             playerState,
@@ -356,24 +362,7 @@ internal sealed class GameSnapshotBuilder
                 Hand: Array.Empty<HandCardEntrySnapshot>(),
                 Enemies: enemies,
                 Selection: null,
-                AvailableActions:
-                [
-                    new CombatActionSnapshot(
-                        ActionType: "end_turn",
-                        CardIndex: null,
-                        PotionSlot: null,
-                        SourceId: null,
-                        SourceTitle: "End turn",
-                        SourceDescription: "End the current player turn.",
-                        TargetType: null,
-                        RequiresTarget: false,
-                        TargetOptions: Array.Empty<string>(),
-                        EnergyCost: null,
-                        StarCost: null,
-                        IsXCost: false,
-                        Tags: ["turn"],
-                        Semantic: null)
-                ]);
+                AvailableActions: Array.Empty<CombatActionSnapshot>());
         }
 
         EnemyStateEntrySnapshot[] builtEnemies = BuildEnemies(combatState).ToArray();
@@ -562,6 +551,14 @@ internal sealed class GameSnapshotBuilder
         if (selection is not null && NPlayerHand.Instance is { } hand && hand.IsInCardSelection)
         {
             return BuildHandSelectionActions(hand);
+        }
+
+        if (!CombatManager.Instance.IsInProgress ||
+            !CombatManager.Instance.IsPlayPhase ||
+            CombatManager.Instance.PlayerActionsDisabled ||
+            !player.Creature.IsAlive)
+        {
+            return Array.Empty<CombatActionSnapshot>();
         }
 
         var actions = new List<CombatActionSnapshot>();

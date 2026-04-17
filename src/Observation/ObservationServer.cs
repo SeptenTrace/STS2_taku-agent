@@ -482,7 +482,7 @@ internal static class ObservationServer
             return (latestSnapshot, true);
         }
 
-        for (int attempt = 0; attempt < 20; attempt++)
+        for (int attempt = 0; attempt < 40; attempt++)
         {
             Thread.Sleep(100);
             latestSnapshot = RunOnMainThread(() => SnapshotBuilder.Build()).GetAwaiter().GetResult();
@@ -526,6 +526,15 @@ internal static class ObservationServer
 
         if (actionType == "proceed" &&
             string.Equals(beforeSnapshot.Context.StateType, currentSnapshot.Context.StateType, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (actionType == "choose_map_node" &&
+            string.Equals(beforeSnapshot.Context.StateType, "map", StringComparison.OrdinalIgnoreCase) &&
+            string.Equals(currentSnapshot.Context.StateType, "map", StringComparison.OrdinalIgnoreCase) &&
+            currentSnapshot.Map is not null &&
+            currentSnapshot.Map.NextOptions.Count == 0)
         {
             return true;
         }
@@ -677,7 +686,12 @@ internal static class ObservationServer
     private static void SendError(HttpListenerResponse response, int statusCode, string message)
     {
         response.StatusCode = statusCode;
-        SendJson(response, new { error = message });
+        SendJson(response, new
+        {
+            status = "error",
+            statusCode,
+            error = message
+        });
     }
 }
 

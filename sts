@@ -28,6 +28,7 @@ Usage:
   ./sts card-reward
   ./sts card-selection
   ./sts treasure
+  ./sts wait CONDITION [TIMEOUT_SECONDS]
   ./sts exec ACTION [INDEX] [TARGET]
   ./sts exec ACTION [key=value ...]
   ./sts full
@@ -43,6 +44,8 @@ Examples:
   ./sts combat actions
   ./sts player summary
   ./sts knowledge cards
+  ./sts wait player_turn
+  ./sts wait rewards 10
   ./sts exec play_card 0 jaw_worm_0
   ./sts exec select_card 1
   ./sts exec end_turn
@@ -60,13 +63,63 @@ pretty_print() {
 
 request() {
   local path="$1"
-  "${CURL_BIN}" -fsS "${BASE_URL}${path}"
+  perform_request GET "${path}"
 }
 
 request_post() {
   local path="$1"
   local body="$2"
-  "${CURL_BIN}" -fsS -X POST -H 'Content-Type: application/json' -d "${body}" "${BASE_URL}${path}"
+  perform_request POST "${path}" "${body}"
+}
+
+pretty_print_stderr() {
+  if [[ -n "${JQ_BIN:-}" ]]; then
+    "${JQ_BIN}" . >&2
+  else
+    cat >&2
+  fi
+}
+
+perform_request() {
+  local method="$1"
+  local path="$2"
+  local body="${3:-}"
+  local tmp_file http_code curl_status
+
+  tmp_file="$(mktemp)"
+
+  if [[ "${method}" == "POST" ]]; then
+    if ! http_code="$("${CURL_BIN}" -sS -o "${tmp_file}" -w "%{http_code}" -X POST -H 'Content-Type: application/json' -d "${body}" "${BASE_URL}${path}")"; then
+      curl_status=$?
+      if [[ -s "${tmp_file}" ]]; then
+        cat "${tmp_file}" >&2
+      fi
+      rm -f "${tmp_file}"
+      return "${curl_status}"
+    fi
+  else
+    if ! http_code="$("${CURL_BIN}" -sS -o "${tmp_file}" -w "%{http_code}" "${BASE_URL}${path}")"; then
+      curl_status=$?
+      if [[ -s "${tmp_file}" ]]; then
+        cat "${tmp_file}" >&2
+      fi
+      rm -f "${tmp_file}"
+      return "${curl_status}"
+    fi
+  fi
+
+  if [[ "${http_code}" =~ ^2[0-9][0-9]$ ]]; then
+    cat "${tmp_file}"
+    rm -f "${tmp_file}"
+    return 0
+  fi
+
+  printf 'HTTP %s for %s %s\n' "${http_code}" "${method}" "${path}" >&2
+  if [[ -s "${tmp_file}" ]]; then
+    pretty_print_stderr < "${tmp_file}"
+  fi
+  rm -f "${tmp_file}"
+  return 22
 }
 
 request_and_print() {
@@ -177,6 +230,109 @@ command_get() {
   request_and_print "${path}"
 }
 
+normalize_wait_condition() {
+  local condition="$1"
+  condition="${condition//-/_}"
+  printf '%s' "${condition}" | tr '[:upper:]' '[:lower:]'
+}
+
+context_matches_condition() {
+  local condition="$1"
+  local context_json="$2"
+  local combat_json="${3:-}"
+
+  if [[ -n "${JQ_BIN:-}" ]]; then
+    case "${condition}" in
+      player_turn)
+        [[ -n "${combat_json}" ]] && "${JQ_BIN}" -e '.stateType == "monster" or .stateType == "elite" or .stateType == "boss"' >/dev/null <<<"${context_json}" &&
+          "${JQ_BIN}" -e '.side == "player"' >/dev/null <<<"${combat_json}"
+        return
+        ;;
+      enemy_turn)
+        [[ -n "${combat_json}" ]] && "${JQ_BIN}" -e '.stateType == "monster" or .stateType == "elite" or .stateType == "boss"' >/dev/null <<<"${context_json}" &&
+          "${JQ_BIN}" -e '.side == "enemy"' >/dev/null <<<"${combat_json}"
+        return
+        ;;
+      *)
+        "${JQ_BIN}" -e --arg expected "${condition}" '.stateType == $expected' >/dev/null <<<"${context_json}"
+        return
+        ;;
+    esac
+  fi
+
+  case "${condition}" in
+    player_turn)
+      [[ "${context_json}" == *'"stateType": "monster"'* || "${context_json}" == *'"stateType": "elite"'* || "${context_json}" == *'"stateType": "boss"'* ]] &&
+        [[ "${combat_json}" == *'"side": "player"'* ]]
+      ;;
+    enemy_turn)
+      [[ "${context_json}" == *'"stateType": "monster"'* || "${context_json}" == *'"stateType": "elite"'* || "${context_json}" == *'"stateType": "boss"'* ]] &&
+        [[ "${combat_json}" == *'"side": "enemy"'* ]]
+      ;;
+    *)
+      [[ "${context_json}" == *"\"stateType\": \"${condition}\""* ]]
+      ;;
+  esac
+}
+
+command_wait() {
+  local condition timeout context_json combat_json normalized
+  condition="${1:-}"
+  timeout="${2:-15}"
+
+  if [[ -z "${condition}" ]]; then
+    printf 'Usage: ./sts wait CONDITION [TIMEOUT_SECONDS]\n' >&2
+    exit 1
+  fi
+
+  if ! [[ "${timeout}" =~ ^[0-9]+$ ]]; then
+    printf 'TIMEOUT_SECONDS must be an integer: %s\n' "${timeout}" >&2
+    exit 1
+  fi
+
+  normalized="$(normalize_wait_condition "${condition}")"
+  SECONDS=0
+
+  while (( SECONDS < timeout )); do
+    context_json="$(request "/api/v1/context")"
+    combat_json=""
+
+    if [[ "${normalized}" == "player_turn" || "${normalized}" == "enemy_turn" ]]; then
+      if context_matches_condition "monster" "${context_json}" 2>/dev/null ||
+         context_matches_condition "elite" "${context_json}" 2>/dev/null ||
+         context_matches_condition "boss" "${context_json}" 2>/dev/null; then
+        combat_json="$(request "/api/v1/combat/summary" 2>/dev/null || true)"
+      fi
+    fi
+
+    if context_matches_condition "${normalized}" "${context_json}" "${combat_json}"; then
+      if [[ -n "${JQ_BIN:-}" ]]; then
+        if [[ -n "${combat_json}" ]]; then
+          "${JQ_BIN}" -n \
+            --arg condition "${normalized}" \
+            --argjson context "${context_json}" \
+            --argjson combat "${combat_json}" \
+            '{condition: $condition, matched: true, context: $context, combat: $combat}'
+        else
+          "${JQ_BIN}" -n \
+            --arg condition "${normalized}" \
+            --argjson context "${context_json}" \
+            '{condition: $condition, matched: true, context: $context}'
+        fi
+      else
+        printf '%s\n' "${context_json}"
+      fi
+      return 0
+    fi
+
+    sleep 0.2
+  done
+
+  printf 'Timed out waiting for condition: %s\n' "${normalized}" >&2
+  request "/api/v1/context" | pretty_print_stderr
+  exit 1
+}
+
 json_escape() {
   local value="$1"
   value="${value//\\/\\\\}"
@@ -278,6 +434,7 @@ main() {
     card-reward) request_and_print "/api/v1/card-reward" ;;
     card-selection|card-select) request_and_print "/api/v1/card-selection" ;;
     treasure) request_and_print "/api/v1/treasure" ;;
+    wait) command_wait "$@" ;;
     exec|do|act) command_exec "$@" ;;
     full) request_and_print "/api/v1/state/full" ;;
     get) command_get "$@" ;;
