@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildExecPayload } from "./exec.ts";
+import { buildExecInvocation, buildExecPayload } from "./exec.ts";
 import { CliError } from "../core/errors.ts";
 
 test("buildExecPayload supports positional action arguments", () => {
@@ -31,5 +31,41 @@ test("buildExecPayload rejects malformed key=value arguments", () => {
   assert.throws(
     () => buildExecPayload("play_card", ["index=1", "bad-arg"]),
     (error) => error instanceof CliError && error.message.includes("key=value")
+  );
+});
+
+test("buildExecInvocation extracts wait flags from positional exec arguments", () => {
+  const invocation = buildExecInvocation("play_card", ["0", "jaw_worm_0", "--wait-for", "player_turn", "--timeout", "9"]);
+  assert.deepEqual(invocation, {
+    payload: {
+      actionType: "play_card",
+      parameters: {
+        index: 0,
+        target: "jaw_worm_0"
+      }
+    },
+    waitFor: "player_turn",
+    timeoutSeconds: 9
+  });
+});
+
+test("buildExecInvocation extracts inline wait flags from key=value exec arguments", () => {
+  const invocation = buildExecInvocation("choose_map_node", ["index=1", "--wait-for=monster"]);
+  assert.deepEqual(invocation, {
+    payload: {
+      actionType: "choose_map_node",
+      parameters: {
+        index: 1
+      }
+    },
+    waitFor: "monster",
+    timeoutSeconds: 15
+  });
+});
+
+test("buildExecInvocation rejects malformed wait timeout", () => {
+  assert.throws(
+    () => buildExecInvocation("end_turn", ["--wait-for", "player_turn", "--timeout", "bad"]),
+    (error) => error instanceof CliError && error.message.includes("TIMEOUT_SECONDS")
   );
 });

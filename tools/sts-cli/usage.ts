@@ -30,6 +30,7 @@ export const usage = `Usage:
   ./sts room summary
   ./sts exec ACTION [INDEX] [TARGET]
   ./sts exec ACTION [key=value ...]
+  ./sts exec ACTION ... [--wait-for CONDITION] [--timeout SECONDS]
   ./sts full
   ./sts get /api/v1/...
 
@@ -54,4 +55,6 @@ Examples:
   ./sts exec play_card 0 jaw_worm_0
   ./sts exec select_card 1
   ./sts exec end_turn
+  ./sts exec proceed --wait-for map
+  ./sts exec end_turn --wait-for player_turn --timeout 10
   ./sts get /api/v1/state/full`;

@@ -6,6 +6,14 @@ internal static class ActionSurfaceBuilder
 {
     public static ActionSurfaceSnapshot Build(GameSnapshot snapshot)
     {
+        if (!snapshot.Context.IsStable || snapshot.Context.IsTransitioning)
+        {
+            return new ActionSurfaceSnapshot(
+                snapshot.Context.StateType,
+                "Wait for the current screen transition to settle before acting.",
+                Array.Empty<SceneActionSnapshot>());
+        }
+
         return snapshot.Context.StateType switch
         {
             "monster" or "elite" or "boss" => BuildCombatActions(snapshot),

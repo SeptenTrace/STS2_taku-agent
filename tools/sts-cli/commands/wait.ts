@@ -39,8 +39,8 @@ function contextStateTypeMatches(context: ContextResponse, expected: string): bo
   return context.stateType === expected;
 }
 
-function combatSideMatches(combat: CombatSummaryResponse | null, expected: string): boolean {
-  return combat !== null && combat.side === expected;
+function isContextStable(context: ContextResponse): boolean {
+  return context.isStable !== false && context.isTransitioning !== true;
 }
 
 function isCombatState(stateType: string | undefined): boolean {
@@ -116,6 +116,10 @@ async function readWaitObservation(client: RequestClient, condition: string): Pr
 }
 
 function observationMatchesCondition(observation: WaitObservation, condition: string): boolean {
+  if (!isContextStable(observation.context)) {
+    return false;
+  }
+
   if (condition === "player_turn") {
     return isCombatState(observation.context.stateType) && isCombatPlayerReady(observation.combat);
   }

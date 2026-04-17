@@ -15,6 +15,8 @@ export interface ContextResponse {
   stateType: string;
   roomType?: string;
   overlayType?: string;
+  isStable?: boolean;
+  isTransitioning?: boolean;
   recommendedQueries?: string[];
 }
 

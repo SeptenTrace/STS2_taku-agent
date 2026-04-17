@@ -25,6 +25,8 @@ internal sealed record ContextSnapshot(
     string StateType,
     string? RoomType,
     string? OverlayType,
+    bool IsStable,
+    bool IsTransitioning,
     IReadOnlyList<string> RecommendedQueries);
 
 internal sealed record RunSnapshot(

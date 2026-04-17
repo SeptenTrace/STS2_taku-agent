@@ -1,4 +1,5 @@
 import type {
+  ActionExecutionResponse,
   ActionSurfaceResponse,
   BundleSelectionResponse,
   CapabilitiesResponse,
@@ -21,7 +22,7 @@ import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
 import { CliError } from "../core/errors.ts";
 import { StreamOutput, type Output } from "../core/output.ts";
 import { buildRoomSummary, claimAllSafeRewards } from "./combo.ts";
-import { buildExecPayload } from "./exec.ts";
+import { buildExecInvocation } from "./exec.ts";
 import { waitForCondition } from "./wait.ts";
 import { usage } from "../usage.ts";
 
@@ -200,8 +201,21 @@ export async function dispatch(
     case "do":
     case "act": {
       const action = args[0] ?? "";
-      const payload = buildExecPayload(action, args.slice(1));
-      output.printJson(await client.request("/api/v1/actions/execute", { method: "POST", body: payload }));
+      const invocation = buildExecInvocation(action, args.slice(1));
+      const execution = await client.request<ActionExecutionResponse>("/api/v1/actions/execute", {
+        method: "POST",
+        body: invocation.payload
+      });
+
+      if (invocation.waitFor && execution.status === "ok") {
+        output.printJson({
+          execution,
+          wait: await waitForCondition(client, invocation.waitFor, invocation.timeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS)
+        });
+        return;
+      }
+
+      output.printJson(execution);
       return;
     }
     case "full":

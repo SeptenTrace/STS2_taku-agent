@@ -42,7 +42,7 @@ internal sealed class GameSnapshotBuilder
 
         if (!RunManager.Instance.IsInProgress)
         {
-            ContextSnapshot menuContext = BuildContext("menu", null, null);
+            ContextSnapshot menuContext = BuildContext("menu", null, null, true, false);
             return new GameSnapshot(
                 Timestamp: timestamp,
                 Context: menuContext,
@@ -68,7 +68,7 @@ internal sealed class GameSnapshotBuilder
         RunState? runState = RunManager.Instance.DebugOnlyGetState();
         if (runState is null)
         {
-            ContextSnapshot unknownContext = BuildContext("unknown", null, null);
+            ContextSnapshot unknownContext = BuildContext("unknown", null, null, false, true);
             return new GameSnapshot(
                 Timestamp: timestamp,
                 Context: unknownContext,
@@ -206,7 +206,23 @@ internal sealed class GameSnapshotBuilder
                 ManualInterventionRequired: true);
         }
 
-        ContextSnapshot context = BuildContext(stateType, currentRoom?.RoomType.ToString(), contextOverlayType);
+        (bool isStable, bool isTransitioning) = EvaluateStateStability(
+            stateType,
+            combat,
+            map,
+            rewards,
+            cardReward,
+            eventState,
+            fakeMerchant,
+            shop,
+            restSite,
+            treasure,
+            cardSelection,
+            bundleSelection,
+            relicSelection,
+            crystalSphere,
+            overlay);
+        ContextSnapshot context = BuildContext(stateType, currentRoom?.RoomType.ToString(), contextOverlayType, isStable, isTransitioning);
         CompactObservationSnapshot compactObservation = BuildCompactObservation(
             context,
             playerState,
@@ -247,13 +263,71 @@ internal sealed class GameSnapshotBuilder
             Overlay: overlay);
     }
 
-    private static ContextSnapshot BuildContext(string stateType, string? roomType, string? overlayType)
+    private static ContextSnapshot BuildContext(string stateType, string? roomType, string? overlayType, bool isStable, bool isTransitioning)
     {
         return new ContextSnapshot(
             StateType: stateType,
             RoomType: roomType,
             OverlayType: overlayType,
+            IsStable: isStable,
+            IsTransitioning: isTransitioning,
             RecommendedQueries: GetRecommendedQueries(stateType));
+    }
+
+    private static (bool IsStable, bool IsTransitioning) EvaluateStateStability(
+        string stateType,
+        CombatStateSnapshot? combat,
+        MapStateSnapshot? map,
+        RewardsStateSnapshot? rewards,
+        CardRewardStateSnapshot? cardReward,
+        EventStateSnapshot? eventState,
+        FakeMerchantStateSnapshot? fakeMerchant,
+        ShopStateSnapshot? shop,
+        RestSiteStateSnapshot? restSite,
+        TreasureStateSnapshot? treasure,
+        CardSelectionStateSnapshot? cardSelection,
+        BundleSelectionStateSnapshot? bundleSelection,
+        RelicSelectionStateSnapshot? relicSelection,
+        CrystalSphereStateSnapshot? crystalSphere,
+        OverlayStateSnapshot? overlay)
+    {
+        bool isStable = stateType switch
+        {
+            "menu" => true,
+            "unknown" => false,
+            "monster" or "elite" or "boss" => combat is not null && IsCombatStable(combat),
+            "map" => map is not null && map.NextOptions.Count > 0,
+            "rewards" => rewards is not null,
+            "card_reward" => cardReward is not null && (cardReward.Cards.Count > 0 || cardReward.CanSkip),
+            "event" => eventState is not null && (eventState.Options.Count > 0 || eventState.InDialogue),
+            "fake_merchant" => fakeMerchant is not null && (fakeMerchant.Items.Count > 0 || fakeMerchant.CanProceed || fakeMerchant.StartedFight),
+            "shop" => shop is not null && (shop.Items.Count > 0 || shop.CanProceed),
+            "rest_site" => restSite is not null && (restSite.Options.Count > 0 || restSite.CanProceed),
+            "treasure" => treasure is not null && (treasure.Relics.Count > 0 || treasure.CanProceed),
+            "card_select" => cardSelection is not null && (cardSelection.Cards.Count > 0 || cardSelection.CanConfirm || cardSelection.CanCancel || cardSelection.CanSkip),
+            "bundle_select" => bundleSelection is not null && (bundleSelection.Bundles.Count > 0 || bundleSelection.CanConfirm || bundleSelection.CanCancel),
+            "relic_select" => relicSelection is not null && (relicSelection.Relics.Count > 0 || relicSelection.CanSkip),
+            "crystal_sphere" => crystalSphere is not null && (crystalSphere.ClickableCells.Count > 0 || crystalSphere.CanProceed),
+            "overlay" => overlay is not null,
+            _ => false
+        };
+
+        return (isStable, !isStable);
+    }
+
+    private static bool IsCombatStable(CombatStateSnapshot combat)
+    {
+        if (combat.Enemies.Count == 0)
+        {
+            return false;
+        }
+
+        if (combat.Side.Equals("enemy", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return combat.Hand.Count > 0 && combat.AvailableActions.Count > 0;
     }
 
     private static RunSnapshot BuildRunSnapshot(RunState runState)
@@ -1429,6 +1503,16 @@ internal sealed class GameSnapshotBuilder
         OverlayStateSnapshot? overlay)
     {
         var facts = new List<string>();
+        if (!context.IsStable || context.IsTransitioning)
+        {
+            facts.Add($"State '{context.StateType}' is still transitioning.");
+            return new CompactObservationSnapshot(
+                StateType: context.StateType,
+                Goal: "Wait for the current screen transition to settle before acting.",
+                Facts: facts,
+                SuggestedQueries: context.RecommendedQueries);
+        }
+
         string goal;
 
         switch (context.StateType)

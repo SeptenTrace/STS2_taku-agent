@@ -196,3 +196,69 @@ test("dispatch rejects unknown subcommands with CliError", async () => {
     (error) => error instanceof CliError && error.message.includes("Unknown player subcommand")
   );
 });
+
+test("dispatch exec can wait for a stable follow-up condition", async () => {
+  const client = new MockClient({
+    "/api/v1/actions/execute": {
+      status: "ok",
+      actionType: "proceed",
+      message: "Proceeded from rewards."
+    },
+    "/api/v1/context": [
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      }
+    ],
+    "/api/v1/actions": [
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Unknown" }
+        ]
+      },
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Unknown" }
+        ]
+      }
+    ]
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "exec", ["proceed", "--wait-for", "map"], output);
+
+  assert.deepEqual(client.requests.map((entry) => entry.path), [
+    "/api/v1/actions/execute",
+    "/api/v1/context",
+    "/api/v1/actions",
+    "/api/v1/context",
+    "/api/v1/actions"
+  ]);
+  assert.deepEqual(output.jsonValues[0], {
+    execution: {
+      status: "ok",
+      actionType: "proceed",
+      message: "Proceeded from rewards."
+    },
+    wait: {
+      condition: "map",
+      matched: true,
+      context: {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      }
+    }
+  });
+});
