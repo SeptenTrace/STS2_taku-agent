@@ -39,7 +39,10 @@ internal static class ObservationApiCatalog
         new("/api/v1/rewards", "low", "Visible non-card rewards and proceed state.", "Use after combat when rewards are open.", ["rewards"]),
         new("/api/v1/card-reward", "low", "Visible card reward choices.", "Use when card rewards are open.", ["card_reward"]),
         new("/api/v1/card-selection", "medium", "Visible cards on selection screens plus confirm/cancel state.", "Use for upgrades, transforms, removals, or choose-a-card screens.", ["card_select"]),
+        new("/api/v1/bundle-selection", "medium", "Visible bundle choices plus preview and confirm state.", "Use when a bundle choice overlay is open.", ["bundle_select"]),
+        new("/api/v1/relic-selection", "low", "Visible relic choices and skip state.", "Use when a relic choice overlay is open.", ["relic_select"]),
         new("/api/v1/treasure", "low", "Visible treasure relic choices and proceed state.", "Use on treasure screens.", ["treasure"]),
+        new("/api/v1/overlay", "low", "Unhandled overlay metadata and manual-intervention guidance.", "Use when stateType is overlay.", ["overlay"]),
         new("/api/v1/state/full", "high", "Full combined snapshot for debugging.", "Use only when targeted endpoints are insufficient.", ["*"])
     ];
 }

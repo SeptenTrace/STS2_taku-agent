@@ -37,6 +37,9 @@ internal static class ObservationDeltaBuilder
         CompareRestSite(previous.RestSite, current.RestSite, changedSections, facts);
         CompareTreasure(previous.Treasure, current.Treasure, changedSections, facts);
         CompareCardSelection(previous.CardSelection, current.CardSelection, changedSections, facts);
+        CompareBundleSelection(previous.BundleSelection, current.BundleSelection, changedSections, facts);
+        CompareRelicSelection(previous.RelicSelection, current.RelicSelection, changedSections, facts);
+        CompareOverlay(previous.Overlay, current.Overlay, changedSections, facts);
 
         if (!changed && facts.Count == 0)
         {
@@ -306,6 +309,57 @@ internal static class ObservationDeltaBuilder
         {
             changedSections.Add("card_selection");
             facts.Add($"Card selection changed. Visible cards: {current.Cards.Count}.");
+        }
+    }
+
+    private static void CompareBundleSelection(BundleSelectionStateSnapshot? previous, BundleSelectionStateSnapshot? current, ISet<string> changedSections, ICollection<string> facts)
+    {
+        if (previous is null || current is null)
+        {
+            return;
+        }
+
+        string previousBundles = string.Join("|", previous.Bundles.Select(bundle => $"{bundle.Index}:{string.Join(",", bundle.Cards.Select(card => card.Id))}"));
+        string currentBundles = string.Join("|", current.Bundles.Select(bundle => $"{bundle.Index}:{string.Join(",", bundle.Cards.Select(card => card.Id))}"));
+        if (!string.Equals(previousBundles, currentBundles, StringComparison.Ordinal) ||
+            previous.PreviewShowing != current.PreviewShowing ||
+            previous.CanConfirm != current.CanConfirm ||
+            previous.CanCancel != current.CanCancel)
+        {
+            changedSections.Add("bundle_selection");
+            facts.Add($"Bundle selection changed. Visible bundles: {current.Bundles.Count}, preview showing: {current.PreviewShowing}.");
+        }
+    }
+
+    private static void CompareRelicSelection(RelicSelectionStateSnapshot? previous, RelicSelectionStateSnapshot? current, ISet<string> changedSections, ICollection<string> facts)
+    {
+        if (previous is null || current is null)
+        {
+            return;
+        }
+
+        string previousRelics = string.Join("|", previous.Relics.Select(relic => relic.Id));
+        string currentRelics = string.Join("|", current.Relics.Select(relic => relic.Id));
+        if (!string.Equals(previousRelics, currentRelics, StringComparison.Ordinal) || previous.CanSkip != current.CanSkip)
+        {
+            changedSections.Add("relic_selection");
+            facts.Add($"Relic selection changed. Visible relics: {current.Relics.Count}.");
+        }
+    }
+
+    private static void CompareOverlay(OverlayStateSnapshot? previous, OverlayStateSnapshot? current, ISet<string> changedSections, ICollection<string> facts)
+    {
+        if (previous is null || current is null)
+        {
+            return;
+        }
+
+        if (!string.Equals(previous.ScreenType, current.ScreenType, StringComparison.Ordinal) ||
+            !string.Equals(previous.Message, current.Message, StringComparison.Ordinal) ||
+            previous.ManualInterventionRequired != current.ManualInterventionRequired)
+        {
+            changedSections.Add("overlay");
+            facts.Add($"Overlay changed to '{current.ScreenType}'.");
         }
     }
 

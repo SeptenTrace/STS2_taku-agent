@@ -201,8 +201,9 @@ export interface TreasureChoiceResponse {
 }
 
 export interface TreasureResponse {
+  message?: string;
   canProceed: boolean;
-  relicChoices: TreasureChoiceResponse[];
+  relics: TreasureChoiceResponse[];
 }
 
 export interface CardSelectionResponse {
@@ -212,4 +213,32 @@ export interface CardSelectionResponse {
   canCancel: boolean;
   canSkip: boolean;
   cards: CardRewardCard[];
+}
+
+export interface CardBundleResponse {
+  index: number;
+  cardCount: number;
+  cards: CardRewardCard[];
+}
+
+export interface BundleSelectionResponse {
+  screenType: string;
+  prompt?: string;
+  previewShowing: boolean;
+  canConfirm: boolean;
+  canCancel: boolean;
+  bundles: CardBundleResponse[];
+  previewCards: CardRewardCard[];
+}
+
+export interface RelicSelectionResponse {
+  prompt?: string;
+  canSkip: boolean;
+  relics: TreasureChoiceResponse[];
+}
+
+export interface OverlayResponse {
+  screenType: string;
+  message: string;
+  manualInterventionRequired: boolean;
 }

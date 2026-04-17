@@ -177,7 +177,10 @@ internal static class ObservationServer
                         "/api/v1/capabilities",
                         "/api/v1/actions",
                         "/api/v1/knowledge/current",
-                        "/api/v1/combat/actions"
+                        "/api/v1/combat/actions",
+                        "/api/v1/bundle-selection",
+                        "/api/v1/relic-selection",
+                        "/api/v1/overlay"
                     }
                 });
                 return;
@@ -301,8 +304,17 @@ internal static class ObservationServer
                 case "/api/v1/card-selection":
                     RequireSection(response, snapshot.CardSelection, "Card selection state is unavailable.");
                     return;
+                case "/api/v1/bundle-selection":
+                    RequireSection(response, snapshot.BundleSelection, "Bundle selection state is unavailable.");
+                    return;
+                case "/api/v1/relic-selection":
+                    RequireSection(response, snapshot.RelicSelection, "Relic selection state is unavailable.");
+                    return;
                 case "/api/v1/treasure":
                     RequireSection(response, snapshot.Treasure, "Treasure state is unavailable.");
+                    return;
+                case "/api/v1/overlay":
+                    RequireSection(response, snapshot.Overlay, "Overlay state is unavailable.");
                     return;
                 case "/api/v1/state/full":
                     SendJson(response, snapshot);

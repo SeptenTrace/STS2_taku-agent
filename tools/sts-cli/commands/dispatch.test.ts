@@ -149,6 +149,26 @@ test("dispatch room summary writes combined room data", async () => {
   assert.equal((output.jsonValues[0] as { context: { stateType: string } }).context.stateType, "rewards");
 });
 
+test("dispatch bundle-selection uses the typed bundle endpoint", async () => {
+  const client = new MockClient({
+    "/api/v1/bundle-selection": {
+      screenType: "bundle",
+      prompt: "Choose a bundle.",
+      previewShowing: false,
+      canConfirm: false,
+      canCancel: false,
+      bundles: [],
+      previewCards: []
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "bundle-selection", [], output);
+
+  assert.deepEqual(client.requests.map((entry) => entry.path), ["/api/v1/bundle-selection"]);
+  assert.equal((output.jsonValues[0] as { screenType: string }).screenType, "bundle");
+});
+
 test("dispatch rejects unknown subcommands with CliError", async () => {
   const client = new MockClient({});
   const output = new MockOutput();

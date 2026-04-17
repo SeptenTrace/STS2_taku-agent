@@ -1,13 +1,16 @@
 import type {
   ActionExecutionResponse,
   ActionSurfaceResponse,
+  BundleSelectionResponse,
   CardRewardResponse,
   CardSelectionResponse,
   CombatSummaryResponse,
   ContextResponse,
   EventResponse,
   MapSummaryResponse,
+  OverlayResponse,
   PlayerSummaryResponse,
+  RelicSelectionResponse,
   RestSiteResponse,
   RewardsResponse,
   ShopResponse,
@@ -24,7 +27,9 @@ const READY_STATES = new Set([
   "rest_site",
   "treasure",
   "card_reward",
-  "card_select"
+  "card_select",
+  "bundle_select",
+  "relic_select"
 ]);
 
 type RoomStateData =
@@ -35,8 +40,11 @@ type RoomStateData =
   | { kind: "rewards"; path: "/api/v1/rewards"; data: RewardsResponse }
   | { kind: "card_reward"; path: "/api/v1/card-reward"; data: CardRewardResponse }
   | { kind: "card_select"; path: "/api/v1/card-selection"; data: CardSelectionResponse }
+  | { kind: "bundle_select"; path: "/api/v1/bundle-selection"; data: BundleSelectionResponse }
+  | { kind: "relic_select"; path: "/api/v1/relic-selection"; data: RelicSelectionResponse }
   | { kind: "rest_site"; path: "/api/v1/rest-site"; data: RestSiteResponse }
-  | { kind: "treasure"; path: "/api/v1/treasure"; data: TreasureResponse };
+  | { kind: "treasure"; path: "/api/v1/treasure"; data: TreasureResponse }
+  | { kind: "overlay"; path: "/api/v1/overlay"; data: OverlayResponse };
 
 export interface PlayerReadyResult {
   condition: "player_ready";
@@ -195,6 +203,18 @@ async function readStateData(client: RequestClient, context: ContextResponse): P
         path: "/api/v1/card-selection",
         data: await client.request<CardSelectionResponse>("/api/v1/card-selection")
       };
+    case "bundle_select":
+      return {
+        kind: "bundle_select",
+        path: "/api/v1/bundle-selection",
+        data: await client.request<BundleSelectionResponse>("/api/v1/bundle-selection")
+      };
+    case "relic_select":
+      return {
+        kind: "relic_select",
+        path: "/api/v1/relic-selection",
+        data: await client.request<RelicSelectionResponse>("/api/v1/relic-selection")
+      };
     case "rest_site":
       return {
         kind: "rest_site",
@@ -206,6 +226,12 @@ async function readStateData(client: RequestClient, context: ContextResponse): P
         kind: "treasure",
         path: "/api/v1/treasure",
         data: await client.request<TreasureResponse>("/api/v1/treasure")
+      };
+    case "overlay":
+      return {
+        kind: "overlay",
+        path: "/api/v1/overlay",
+        data: await client.request<OverlayResponse>("/api/v1/overlay")
       };
     default:
       return undefined;

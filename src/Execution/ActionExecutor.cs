@@ -16,7 +16,9 @@ using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Events;
+using MegaCrit.Sts2.Core.Nodes.Events.Custom;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
+using MegaCrit.Sts2.Core.Nodes.Relics;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.RestSite;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
@@ -74,6 +76,11 @@ internal static class ActionExecutor
                 "select_card" => ExecuteSelectCard(parameters),
                 "confirm_selection" => ExecuteConfirmSelection(),
                 "cancel_selection" or "skip_selection" => ExecuteCancelSelection(),
+                "select_bundle" => ExecuteSelectBundle(parameters),
+                "confirm_bundle_selection" => ExecuteConfirmBundleSelection(),
+                "cancel_bundle_selection" => ExecuteCancelBundleSelection(),
+                "select_relic" => ExecuteSelectRelic(parameters),
+                "skip_relic_selection" => ExecuteSkipRelicSelection(),
                 "claim_treasure_relic" => ExecuteClaimTreasureRelic(parameters),
                 _ => ActionExecutionOutcome.Fail($"Unknown action type '{actionType}'.")
             };
@@ -744,6 +751,110 @@ internal static class ActionExecutor
         }
 
         return ActionExecutionOutcome.Fail("No enabled cancel or close control is available.");
+    }
+
+    private static ActionExecutionOutcome ExecuteSelectBundle(IReadOnlyDictionary<string, JsonElement> parameters)
+    {
+        if (NOverlayStack.Instance?.Peek() is not NChooseABundleSelectionScreen screen)
+        {
+            return ActionExecutionOutcome.Fail("Bundle selection screen is not open.");
+        }
+
+        int bundleIndex = GetRequiredInt(parameters, "index", "bundle_index");
+        if (bundleIndex < 0)
+        {
+            return ActionExecutionOutcome.Fail("Missing 'index'.");
+        }
+
+        if (screen.GetNodeOrNull<Control>("%BundlePreviewContainer")?.Visible == true)
+        {
+            return ActionExecutionOutcome.Fail("A bundle preview is already open. Confirm or cancel it first.");
+        }
+
+        List<NCardBundle> bundles = GodotNodeSearch.FindAll<NCardBundle>(screen);
+        if (bundleIndex >= bundles.Count)
+        {
+            return ActionExecutionOutcome.Fail($"bundle_index {bundleIndex} is out of range ({bundles.Count} bundles).");
+        }
+
+        bundles[bundleIndex].Hitbox.ForceClick();
+        return ActionExecutionOutcome.Ok($"Selected bundle {bundleIndex} for preview.");
+    }
+
+    private static ActionExecutionOutcome ExecuteConfirmBundleSelection()
+    {
+        if (NOverlayStack.Instance?.Peek() is not NChooseABundleSelectionScreen screen)
+        {
+            return ActionExecutionOutcome.Fail("Bundle selection screen is not open.");
+        }
+
+        NConfirmButton? confirmButton = screen.GetNodeOrNull<NConfirmButton>("%Confirm");
+        if (confirmButton is not { IsEnabled: true })
+        {
+            return ActionExecutionOutcome.Fail("Bundle confirm button is not enabled.");
+        }
+
+        confirmButton.ForceClick();
+        return ActionExecutionOutcome.Ok("Confirmed bundle selection.");
+    }
+
+    private static ActionExecutionOutcome ExecuteCancelBundleSelection()
+    {
+        if (NOverlayStack.Instance?.Peek() is not NChooseABundleSelectionScreen screen)
+        {
+            return ActionExecutionOutcome.Fail("Bundle selection screen is not open.");
+        }
+
+        NBackButton? cancelButton = screen.GetNodeOrNull<NBackButton>("%Cancel");
+        if (cancelButton is not { IsEnabled: true })
+        {
+            return ActionExecutionOutcome.Fail("Bundle cancel button is not enabled.");
+        }
+
+        cancelButton.ForceClick();
+        return ActionExecutionOutcome.Ok("Cancelled bundle selection preview.");
+    }
+
+    private static ActionExecutionOutcome ExecuteSelectRelic(IReadOnlyDictionary<string, JsonElement> parameters)
+    {
+        if (NOverlayStack.Instance?.Peek() is not NChooseARelicSelection screen)
+        {
+            return ActionExecutionOutcome.Fail("Relic selection screen is not open.");
+        }
+
+        int relicIndex = GetRequiredInt(parameters, "index", "relic_index");
+        if (relicIndex < 0)
+        {
+            return ActionExecutionOutcome.Fail("Missing 'index'.");
+        }
+
+        List<NRelicBasicHolder> holders = GodotNodeSearch.FindAll<NRelicBasicHolder>(screen);
+        if (relicIndex >= holders.Count)
+        {
+            return ActionExecutionOutcome.Fail($"relic_index {relicIndex} is out of range ({holders.Count} relics).");
+        }
+
+        NRelicBasicHolder holder = holders[relicIndex];
+        string title = ObservationText.SafeGetText(() => holder.Relic?.Model?.Title) ?? "unknown";
+        holder.ForceClick();
+        return ActionExecutionOutcome.Ok($"Selected relic '{title}'.");
+    }
+
+    private static ActionExecutionOutcome ExecuteSkipRelicSelection()
+    {
+        if (NOverlayStack.Instance?.Peek() is not NChooseARelicSelection screen)
+        {
+            return ActionExecutionOutcome.Fail("Relic selection screen is not open.");
+        }
+
+        NClickableControl? skipButton = screen.GetNodeOrNull<NClickableControl>("SkipButton");
+        if (skipButton is not { IsEnabled: true })
+        {
+            return ActionExecutionOutcome.Fail("No skip option is available.");
+        }
+
+        skipButton.ForceClick();
+        return ActionExecutionOutcome.Ok("Skipped relic selection.");
     }
 
     private static ActionExecutionOutcome ExecuteClaimTreasureRelic(IReadOnlyDictionary<string, JsonElement> parameters)

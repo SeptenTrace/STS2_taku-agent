@@ -1,13 +1,16 @@
 import type {
   ActionSurfaceResponse,
+  BundleSelectionResponse,
   CapabilitiesResponse,
   CardRewardResponse,
   ContextResponse,
   EventResponse,
   MapSummaryResponse,
   ObservationCompactResponse,
+  OverlayResponse,
   PingResponse,
   PlayerSummaryResponse,
+  RelicSelectionResponse,
   RewardsResponse,
   ShopResponse
 } from "../api-types.ts";
@@ -147,8 +150,19 @@ export async function dispatch(
     case "card-selection":
       await printRequest(client, output, "/api/v1/card-selection");
       return;
+    case "bundle":
+    case "bundle-selection":
+      await printRequest<BundleSelectionResponse>(client, output, "/api/v1/bundle-selection");
+      return;
+    case "relic":
+    case "relic-selection":
+      await printRequest<RelicSelectionResponse>(client, output, "/api/v1/relic-selection");
+      return;
     case "treasure":
       await printRequest(client, output, "/api/v1/treasure");
+      return;
+    case "overlay":
+      await printRequest<OverlayResponse>(client, output, "/api/v1/overlay");
       return;
     case "wait": {
       const condition = args[0];

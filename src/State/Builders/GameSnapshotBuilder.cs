@@ -12,6 +12,7 @@ using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Events;
+using MegaCrit.Sts2.Core.Nodes.Events.Custom;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Relics;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
@@ -44,7 +45,7 @@ internal sealed class GameSnapshotBuilder
                 Context: menuContext,
                 Run: null,
                 Player: null,
-                CompactObservation: BuildCompactObservation(menuContext, null, null, null, null, null, null, null, null, null, null, null),
+                CompactObservation: BuildCompactObservation(menuContext, null, null, null, null, null, null, null, null, null, null, null, null, null),
                 Combat: null,
                 Map: null,
                 Rewards: null,
@@ -54,6 +55,8 @@ internal sealed class GameSnapshotBuilder
                 RestSite: null,
                 Treasure: null,
                 CardSelection: null,
+                BundleSelection: null,
+                RelicSelection: null,
                 Overlay: null);
         }
 
@@ -66,7 +69,7 @@ internal sealed class GameSnapshotBuilder
                 Context: unknownContext,
                 Run: null,
                 Player: null,
-                CompactObservation: BuildCompactObservation(unknownContext, null, null, null, null, null, null, null, null, null, null, null),
+                CompactObservation: BuildCompactObservation(unknownContext, null, null, null, null, null, null, null, null, null, null, null, null, null),
                 Combat: null,
                 Map: null,
                 Rewards: null,
@@ -76,6 +79,8 @@ internal sealed class GameSnapshotBuilder
                 RestSite: null,
                 Treasure: null,
                 CardSelection: null,
+                BundleSelection: null,
+                RelicSelection: null,
                 Overlay: null);
         }
 
@@ -99,6 +104,8 @@ internal sealed class GameSnapshotBuilder
         RestSiteStateSnapshot? restSite = null;
         TreasureStateSnapshot? treasure = null;
         OverlayStateSnapshot? overlay = null;
+        BundleSelectionStateSnapshot? bundleSelection = null;
+        RelicSelectionStateSnapshot? relicSelection = null;
 
         if (topOverlay is NCardGridSelectionScreen gridSelection)
         {
@@ -111,6 +118,18 @@ internal sealed class GameSnapshotBuilder
             stateType = "card_select";
             contextOverlayType = chooseCardSelection.GetType().Name;
             cardSelection = BuildChooseCardSelectionState(chooseCardSelection);
+        }
+        else if (topOverlay is NChooseABundleSelectionScreen bundleSelectionScreen)
+        {
+            stateType = "bundle_select";
+            contextOverlayType = bundleSelectionScreen.GetType().Name;
+            bundleSelection = BuildBundleSelectionState(bundleSelectionScreen);
+        }
+        else if (topOverlay is NChooseARelicSelection relicSelectionScreen)
+        {
+            stateType = "relic_select";
+            contextOverlayType = relicSelectionScreen.GetType().Name;
+            relicSelection = BuildRelicSelectionState(relicSelectionScreen);
         }
         else if (!mapIsOpen && topOverlay is NCardRewardSelectionScreen cardRewardSelection)
         {
@@ -160,7 +179,8 @@ internal sealed class GameSnapshotBuilder
             contextOverlayType = overlayScreen.GetType().Name;
             overlay = new OverlayStateSnapshot(
                 ScreenType: overlayScreen.GetType().Name,
-                Message: $"Unhandled overlay: {overlayScreen.GetType().Name}");
+                Message: $"Unhandled overlay: {overlayScreen.GetType().Name}",
+                ManualInterventionRequired: true);
         }
 
         ContextSnapshot context = BuildContext(stateType, currentRoom?.RoomType.ToString(), contextOverlayType);
@@ -176,6 +196,8 @@ internal sealed class GameSnapshotBuilder
             restSite,
             treasure,
             cardSelection,
+            bundleSelection,
+            relicSelection,
             overlay);
 
         return new GameSnapshot(
@@ -193,6 +215,8 @@ internal sealed class GameSnapshotBuilder
             RestSite: restSite,
             Treasure: treasure,
             CardSelection: cardSelection,
+            BundleSelection: bundleSelection,
+            RelicSelection: relicSelection,
             Overlay: overlay);
     }
 
@@ -905,6 +929,82 @@ internal sealed class GameSnapshotBuilder
             Cards: cards);
     }
 
+    private static BundleSelectionStateSnapshot BuildBundleSelectionState(NChooseABundleSelectionScreen screen)
+    {
+        var bundles = new List<CardBundleEntrySnapshot>();
+        int bundleIndex = 0;
+        foreach (NCardBundle bundle in GodotNodeSearch.FindAll<NCardBundle>(screen))
+        {
+            var cards = new List<CardRewardEntrySnapshot>();
+            int cardIndex = 0;
+            foreach (CardModel card in bundle.Bundle)
+            {
+                cards.Add(BuildCardRewardEntry(cardIndex, card));
+                cardIndex++;
+            }
+
+            bundles.Add(new CardBundleEntrySnapshot(
+                Index: bundleIndex,
+                CardCount: cards.Count,
+                Cards: cards));
+            bundleIndex++;
+        }
+
+        var previewCards = new List<CardRewardEntrySnapshot>();
+        Control? previewCardsContainer = screen.GetNodeOrNull<Control>("%Cards");
+        if (previewCardsContainer is not null)
+        {
+            int previewIndex = 0;
+            foreach (NPreviewCardHolder holder in GodotNodeSearch.FindAll<NPreviewCardHolder>(previewCardsContainer))
+            {
+                CardModel? card = holder.CardModel;
+                if (card is null)
+                {
+                    continue;
+                }
+
+                previewCards.Add(BuildCardRewardEntry(previewIndex, card));
+                previewIndex++;
+            }
+        }
+
+        return new BundleSelectionStateSnapshot(
+            ScreenType: "bundle",
+            Prompt: "Choose a bundle.",
+            PreviewShowing: screen.GetNodeOrNull<Control>("%BundlePreviewContainer")?.Visible == true,
+            CanConfirm: screen.GetNodeOrNull<NConfirmButton>("%Confirm")?.IsEnabled ?? false,
+            CanCancel: screen.GetNodeOrNull<NBackButton>("%Cancel")?.IsEnabled ?? false,
+            Bundles: bundles,
+            PreviewCards: previewCards);
+    }
+
+    private static RelicSelectionStateSnapshot BuildRelicSelectionState(NChooseARelicSelection screen)
+    {
+        var relics = new List<RelicChoiceEntrySnapshot>();
+        int index = 0;
+        foreach (NRelicBasicHolder holder in GodotNodeSearch.FindAll<NRelicBasicHolder>(screen))
+        {
+            RelicModel? relic = holder.Relic?.Model;
+            if (relic is null)
+            {
+                continue;
+            }
+
+            relics.Add(new RelicChoiceEntrySnapshot(
+                Index: index,
+                Id: relic.Id.Entry,
+                Title: ObservationText.SafeGetText(() => relic.Title) ?? relic.Id.Entry,
+                Description: ObservationText.SafeGetText(() => relic.DynamicDescription) ?? string.Empty,
+                Rarity: relic.Rarity.ToString()));
+            index++;
+        }
+
+        return new RelicSelectionStateSnapshot(
+            Prompt: "Choose a relic.",
+            CanSkip: screen.GetNodeOrNull<NClickableControl>("SkipButton") is { IsEnabled: true, Visible: true },
+            Relics: relics);
+    }
+
     private static EventStateSnapshot BuildEventState(EventRoom eventRoom)
     {
         var eventModel = eventRoom.CanonicalEvent;
@@ -1137,6 +1237,9 @@ internal sealed class GameSnapshotBuilder
             "rewards" => ["/api/v1/context", "/api/v1/rewards", "/api/v1/actions", "/api/v1/player/summary"],
             "card_reward" => ["/api/v1/context", "/api/v1/card-reward", "/api/v1/actions", "/api/v1/player/deck", "/api/v1/knowledge/current"],
             "card_select" => ["/api/v1/context", "/api/v1/card-selection", "/api/v1/actions", "/api/v1/player/deck", "/api/v1/knowledge/current"],
+            "bundle_select" => ["/api/v1/context", "/api/v1/bundle-selection", "/api/v1/actions", "/api/v1/knowledge/current"],
+            "relic_select" => ["/api/v1/context", "/api/v1/relic-selection", "/api/v1/actions", "/api/v1/player/relics", "/api/v1/knowledge/relics"],
+            "overlay" => ["/api/v1/context", "/api/v1/overlay"],
             "monster" or "elite" or "boss" =>
             [
                 "/api/v1/context",
@@ -1162,6 +1265,8 @@ internal sealed class GameSnapshotBuilder
         RestSiteStateSnapshot? restSite,
         TreasureStateSnapshot? treasure,
         CardSelectionStateSnapshot? cardSelection,
+        BundleSelectionStateSnapshot? bundleSelection,
+        RelicSelectionStateSnapshot? relicSelection,
         OverlayStateSnapshot? overlay)
     {
         var facts = new List<string>();
@@ -1239,6 +1344,17 @@ internal sealed class GameSnapshotBuilder
                     facts.Add($"Selection screen {cardSelection.ScreenType}, cards {cardSelection.Cards.Count}.");
                 }
                 break;
+            case "bundle_select":
+                goal = "Resolve the current bundle choice before returning to the room flow.";
+                if (bundleSelection is not null)
+                {
+                    facts.Add($"Visible bundles: {bundleSelection.Bundles.Count}, preview showing {bundleSelection.PreviewShowing}.");
+                }
+                break;
+            case "relic_select":
+                goal = "Choose or skip a relic selection overlay.";
+                facts.Add($"Visible relic choices: {relicSelection?.Relics.Count ?? 0}.");
+                break;
             case "treasure":
                 goal = "Pick a relic from the treasure screen.";
                 facts.Add($"Visible relic choices: {treasure?.Relics.Count ?? 0}.");
@@ -1247,7 +1363,7 @@ internal sealed class GameSnapshotBuilder
                 goal = "An unhandled overlay is active. Query context first and fall back to full state only if blocked.";
                 if (overlay is not null)
                 {
-                    facts.Add(overlay.Message);
+                    facts.Add($"{overlay.Message} Manual intervention required: {overlay.ManualInterventionRequired}.");
                 }
                 break;
             default:

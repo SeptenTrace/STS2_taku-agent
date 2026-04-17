@@ -16,6 +16,8 @@ internal static class ActionSurfaceBuilder
             "rewards" => BuildRewardsActions(snapshot),
             "card_reward" => BuildCardRewardActions(snapshot),
             "card_select" => BuildCardSelectionActions(snapshot),
+            "bundle_select" => BuildBundleSelectionActions(snapshot),
+            "relic_select" => BuildRelicSelectionActions(snapshot),
             "treasure" => BuildTreasureActions(snapshot),
             _ => new ActionSurfaceSnapshot(snapshot.Context.StateType, snapshot.CompactObservation.Goal, Array.Empty<SceneActionSnapshot>())
         };
@@ -335,6 +337,91 @@ internal static class ActionSurfaceBuilder
         }
 
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Claim a treasure relic or proceed.", actions);
+    }
+
+    private static ActionSurfaceSnapshot BuildBundleSelectionActions(GameSnapshot snapshot)
+    {
+        var actions = new List<SceneActionSnapshot>();
+
+        if (snapshot.BundleSelection is not null)
+        {
+            foreach (CardBundleEntrySnapshot bundle in snapshot.BundleSelection.Bundles)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "select_bundle",
+                    Index: bundle.Index,
+                    Label: $"Bundle {bundle.Index}",
+                    Description: $"Preview a bundle with {bundle.CardCount} cards.",
+                    IsAvailable: !snapshot.BundleSelection.PreviewShowing,
+                    Parameters: [new ActionArgumentSnapshot("index", bundle.Index.ToString())],
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["bundle"]));
+            }
+
+            if (snapshot.BundleSelection.CanConfirm)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "confirm_bundle_selection",
+                    Index: null,
+                    Label: "Confirm bundle",
+                    Description: "Confirm the currently previewed bundle.",
+                    IsAvailable: true,
+                    Parameters: Array.Empty<ActionArgumentSnapshot>(),
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["confirm", "bundle"]));
+            }
+
+            if (snapshot.BundleSelection.CanCancel)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "cancel_bundle_selection",
+                    Index: null,
+                    Label: "Cancel bundle preview",
+                    Description: "Cancel the current bundle preview.",
+                    IsAvailable: true,
+                    Parameters: Array.Empty<ActionArgumentSnapshot>(),
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["cancel", "bundle"]));
+            }
+        }
+
+        return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Resolve the current bundle selection.", actions);
+    }
+
+    private static ActionSurfaceSnapshot BuildRelicSelectionActions(GameSnapshot snapshot)
+    {
+        var actions = new List<SceneActionSnapshot>();
+
+        if (snapshot.RelicSelection is not null)
+        {
+            foreach (RelicChoiceEntrySnapshot relic in snapshot.RelicSelection.Relics)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "select_relic",
+                    Index: relic.Index,
+                    Label: relic.Title,
+                    Description: relic.Description,
+                    IsAvailable: true,
+                    Parameters: [new ActionArgumentSnapshot("index", relic.Index.ToString())],
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: BuildTags("relic", relic.Rarity.ToLowerInvariant())));
+            }
+
+            if (snapshot.RelicSelection.CanSkip)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "skip_relic_selection",
+                    Index: null,
+                    Label: "Skip relic selection",
+                    Description: "Do not choose any of the visible relics.",
+                    IsAvailable: true,
+                    Parameters: Array.Empty<ActionArgumentSnapshot>(),
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["skip", "relic"]));
+            }
+        }
+
+        return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Resolve the current relic choice.", actions);
     }
 
     private static string[] BuildTags(params string[] values)

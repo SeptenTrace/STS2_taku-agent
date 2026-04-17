@@ -19,7 +19,10 @@ export const usage = `Usage:
   ./sts rewards claim-all-safe
   ./sts card-reward
   ./sts card-selection
+  ./sts bundle-selection
+  ./sts relic-selection
   ./sts treasure
+  ./sts overlay
   ./sts wait CONDITION [TIMEOUT_SECONDS]
   ./sts wait player-ready [TIMEOUT_SECONDS]
   ./sts room summary
@@ -39,6 +42,8 @@ Examples:
   ./sts player summary
   ./sts room summary
   ./sts knowledge cards
+  ./sts bundle-selection
+  ./sts relic-selection
   ./sts wait player_turn
   ./sts wait player-ready
   ./sts wait rewards 10

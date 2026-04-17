@@ -15,6 +15,8 @@ internal sealed record GameSnapshot(
     RestSiteStateSnapshot? RestSite,
     TreasureStateSnapshot? Treasure,
     CardSelectionStateSnapshot? CardSelection,
+    BundleSelectionStateSnapshot? BundleSelection,
+    RelicSelectionStateSnapshot? RelicSelection,
     OverlayStateSnapshot? Overlay);
 
 internal sealed record ContextSnapshot(
@@ -304,9 +306,29 @@ internal sealed record CardSelectionStateSnapshot(
     bool CanSkip,
     IReadOnlyList<CardRewardEntrySnapshot> Cards);
 
+internal sealed record BundleSelectionStateSnapshot(
+    string ScreenType,
+    string? Prompt,
+    bool PreviewShowing,
+    bool CanConfirm,
+    bool CanCancel,
+    IReadOnlyList<CardBundleEntrySnapshot> Bundles,
+    IReadOnlyList<CardRewardEntrySnapshot> PreviewCards);
+
+internal sealed record CardBundleEntrySnapshot(
+    int Index,
+    int CardCount,
+    IReadOnlyList<CardRewardEntrySnapshot> Cards);
+
+internal sealed record RelicSelectionStateSnapshot(
+    string? Prompt,
+    bool CanSkip,
+    IReadOnlyList<RelicChoiceEntrySnapshot> Relics);
+
 internal sealed record OverlayStateSnapshot(
     string ScreenType,
-    string Message);
+    string Message,
+    bool ManualInterventionRequired);
 
 internal sealed record CompactObservationSnapshot(
     string StateType,

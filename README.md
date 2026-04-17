@@ -119,6 +119,9 @@ Observation server:
 - `http://localhost:15527/api/v1/actions/execute`
 - `http://localhost:15527/api/v1/knowledge/current`
 - `http://localhost:15527/api/v1/combat/actions`
+- `http://localhost:15527/api/v1/bundle-selection`
+- `http://localhost:15527/api/v1/relic-selection`
+- `http://localhost:15527/api/v1/overlay`
 
 Local CLI:
 - `./sts ping`
@@ -131,6 +134,9 @@ Local CLI:
 - `./sts combat actions`
 - `./sts player summary`
 - `./sts knowledge current`
+- `./sts bundle-selection`
+- `./sts relic-selection`
+- `./sts overlay`
 - `./sts get /api/v1/state/full`
 
 CLI implementation notes:
@@ -186,6 +192,11 @@ Current implemented Phase 2 surface:
 - `confirm_selection`
 - `cancel_selection`
 - `skip_selection`
+- `select_bundle`
+- `confirm_bundle_selection`
+- `cancel_bundle_selection`
+- `select_relic`
+- `skip_relic_selection`
 - `claim_treasure_relic`
 
 Validated in live play:
