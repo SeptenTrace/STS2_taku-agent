@@ -34,6 +34,7 @@ internal static class ObservationApiCatalog
         new("/api/v1/combat/piles", "medium", "Draw, discard, and exhaust pile contents.", "Use only when pile order or recycle effects matter.", ["monster", "elite", "boss"]),
         new("/api/v1/map/summary", "low", "Current map position and travelable next nodes.", "Use on map screens.", ["map"]),
         new("/api/v1/event", "low", "Current event text and options.", "Use on event screens.", ["event"]),
+        new("/api/v1/fake-merchant", "medium", "Fake merchant relic inventory and proceed state.", "Use on Fake Merchant events.", ["fake_merchant"]),
         new("/api/v1/shop", "medium", "Shop inventory with prices and affordability.", "Use on merchant screens.", ["shop"]),
         new("/api/v1/rest-site", "low", "Rest site options and enabled state.", "Use on campfire screens.", ["rest_site"]),
         new("/api/v1/rewards", "low", "Visible non-card rewards and proceed state.", "Use after combat when rewards are open.", ["rewards"]),
@@ -41,6 +42,7 @@ internal static class ObservationApiCatalog
         new("/api/v1/card-selection", "medium", "Visible cards on selection screens plus confirm/cancel state.", "Use for upgrades, transforms, removals, or choose-a-card screens.", ["card_select"]),
         new("/api/v1/bundle-selection", "medium", "Visible bundle choices plus preview and confirm state.", "Use when a bundle choice overlay is open.", ["bundle_select"]),
         new("/api/v1/relic-selection", "low", "Visible relic choices and skip state.", "Use when a relic choice overlay is open.", ["relic_select"]),
+        new("/api/v1/crystal-sphere", "medium", "Crystal Sphere grid state, tools, and clickable cells.", "Use on Crystal Sphere overlays.", ["crystal_sphere"]),
         new("/api/v1/treasure", "low", "Visible treasure relic choices and proceed state.", "Use on treasure screens.", ["treasure"]),
         new("/api/v1/overlay", "low", "Unhandled overlay metadata and manual-intervention guidance.", "Use when stateType is overlay.", ["overlay"]),
         new("/api/v1/state/full", "high", "Full combined snapshot for debugging.", "Use only when targeted endpoints are insufficient.", ["*"])

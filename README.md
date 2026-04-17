@@ -119,8 +119,10 @@ Observation server:
 - `http://localhost:15527/api/v1/actions/execute`
 - `http://localhost:15527/api/v1/knowledge/current`
 - `http://localhost:15527/api/v1/combat/actions`
+- `http://localhost:15527/api/v1/fake-merchant`
 - `http://localhost:15527/api/v1/bundle-selection`
 - `http://localhost:15527/api/v1/relic-selection`
+- `http://localhost:15527/api/v1/crystal-sphere`
 - `http://localhost:15527/api/v1/overlay`
 
 Local CLI:
@@ -134,8 +136,10 @@ Local CLI:
 - `./sts combat actions`
 - `./sts player summary`
 - `./sts knowledge current`
+- `./sts fake-merchant`
 - `./sts bundle-selection`
 - `./sts relic-selection`
+- `./sts crystal-sphere`
 - `./sts overlay`
 - `./sts get /api/v1/state/full`
 
@@ -197,6 +201,9 @@ Current implemented Phase 2 surface:
 - `cancel_bundle_selection`
 - `select_relic`
 - `skip_relic_selection`
+- `crystal_sphere_set_tool`
+- `crystal_sphere_click_cell`
+- `crystal_sphere_proceed`
 - `claim_treasure_relic`
 
 Validated in live play:

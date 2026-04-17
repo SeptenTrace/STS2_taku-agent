@@ -4,7 +4,9 @@ import type {
   CapabilitiesResponse,
   CardRewardResponse,
   ContextResponse,
+  CrystalSphereResponse,
   EventResponse,
+  FakeMerchantResponse,
   MapSummaryResponse,
   ObservationCompactResponse,
   OverlayResponse,
@@ -128,6 +130,9 @@ export async function dispatch(
     case "event":
       await printRequest<EventResponse>(client, output, "/api/v1/event");
       return;
+    case "fake-merchant":
+      await printRequest<FakeMerchantResponse>(client, output, "/api/v1/fake-merchant");
+      return;
     case "shop":
       await printRequest<ShopResponse>(client, output, "/api/v1/shop");
       return;
@@ -157,6 +162,9 @@ export async function dispatch(
     case "relic":
     case "relic-selection":
       await printRequest<RelicSelectionResponse>(client, output, "/api/v1/relic-selection");
+      return;
+    case "crystal-sphere":
+      await printRequest<CrystalSphereResponse>(client, output, "/api/v1/crystal-sphere");
       return;
     case "treasure":
       await printRequest(client, output, "/api/v1/treasure");

@@ -13,6 +13,7 @@ export const usage = `Usage:
   ./sts combat [summary|actions|hand|enemies|piles]
   ./sts map
   ./sts event
+  ./sts fake-merchant
   ./sts shop
   ./sts rest-site
   ./sts rewards
@@ -21,6 +22,7 @@ export const usage = `Usage:
   ./sts card-selection
   ./sts bundle-selection
   ./sts relic-selection
+  ./sts crystal-sphere
   ./sts treasure
   ./sts overlay
   ./sts wait CONDITION [TIMEOUT_SECONDS]
@@ -44,6 +46,7 @@ Examples:
   ./sts knowledge cards
   ./sts bundle-selection
   ./sts relic-selection
+  ./sts crystal-sphere
   ./sts wait player_turn
   ./sts wait player-ready
   ./sts wait rewards 10

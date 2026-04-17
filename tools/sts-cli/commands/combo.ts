@@ -6,7 +6,9 @@ import type {
   CardSelectionResponse,
   CombatSummaryResponse,
   ContextResponse,
+  CrystalSphereResponse,
   EventResponse,
+  FakeMerchantResponse,
   MapSummaryResponse,
   OverlayResponse,
   PlayerSummaryResponse,
@@ -23,25 +25,29 @@ const READY_STATES = new Set([
   "rewards",
   "map",
   "event",
+  "fake_merchant",
   "shop",
   "rest_site",
   "treasure",
   "card_reward",
   "card_select",
   "bundle_select",
-  "relic_select"
+  "relic_select",
+  "crystal_sphere"
 ]);
 
 type RoomStateData =
   | { kind: "combat"; path: "/api/v1/combat/summary"; data: CombatSummaryResponse }
   | { kind: "map"; path: "/api/v1/map/summary"; data: MapSummaryResponse }
   | { kind: "event"; path: "/api/v1/event"; data: EventResponse }
+  | { kind: "fake_merchant"; path: "/api/v1/fake-merchant"; data: FakeMerchantResponse }
   | { kind: "shop"; path: "/api/v1/shop"; data: ShopResponse }
   | { kind: "rewards"; path: "/api/v1/rewards"; data: RewardsResponse }
   | { kind: "card_reward"; path: "/api/v1/card-reward"; data: CardRewardResponse }
   | { kind: "card_select"; path: "/api/v1/card-selection"; data: CardSelectionResponse }
   | { kind: "bundle_select"; path: "/api/v1/bundle-selection"; data: BundleSelectionResponse }
   | { kind: "relic_select"; path: "/api/v1/relic-selection"; data: RelicSelectionResponse }
+  | { kind: "crystal_sphere"; path: "/api/v1/crystal-sphere"; data: CrystalSphereResponse }
   | { kind: "rest_site"; path: "/api/v1/rest-site"; data: RestSiteResponse }
   | { kind: "treasure"; path: "/api/v1/treasure"; data: TreasureResponse }
   | { kind: "overlay"; path: "/api/v1/overlay"; data: OverlayResponse };
@@ -179,6 +185,12 @@ async function readStateData(client: RequestClient, context: ContextResponse): P
         path: "/api/v1/event",
         data: await client.request<EventResponse>("/api/v1/event")
       };
+    case "fake_merchant":
+      return {
+        kind: "fake_merchant",
+        path: "/api/v1/fake-merchant",
+        data: await client.request<FakeMerchantResponse>("/api/v1/fake-merchant")
+      };
     case "shop":
       return {
         kind: "shop",
@@ -214,6 +226,12 @@ async function readStateData(client: RequestClient, context: ContextResponse): P
         kind: "relic_select",
         path: "/api/v1/relic-selection",
         data: await client.request<RelicSelectionResponse>("/api/v1/relic-selection")
+      };
+    case "crystal_sphere":
+      return {
+        kind: "crystal_sphere",
+        path: "/api/v1/crystal-sphere",
+        data: await client.request<CrystalSphereResponse>("/api/v1/crystal-sphere")
       };
     case "rest_site":
       return {

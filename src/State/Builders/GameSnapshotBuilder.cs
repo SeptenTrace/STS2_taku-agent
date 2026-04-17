@@ -7,12 +7,15 @@ using MegaCrit.Sts2.Core.Entities.Merchant;
 using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Nodes.Combat;
+using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Events;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom;
+using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Relics;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
@@ -45,18 +48,20 @@ internal sealed class GameSnapshotBuilder
                 Context: menuContext,
                 Run: null,
                 Player: null,
-                CompactObservation: BuildCompactObservation(menuContext, null, null, null, null, null, null, null, null, null, null, null, null, null),
+                CompactObservation: BuildCompactObservation(menuContext, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null),
                 Combat: null,
                 Map: null,
                 Rewards: null,
                 CardReward: null,
                 Event: null,
+                FakeMerchant: null,
                 Shop: null,
                 RestSite: null,
                 Treasure: null,
                 CardSelection: null,
                 BundleSelection: null,
                 RelicSelection: null,
+                CrystalSphere: null,
                 Overlay: null);
         }
 
@@ -69,18 +74,20 @@ internal sealed class GameSnapshotBuilder
                 Context: unknownContext,
                 Run: null,
                 Player: null,
-                CompactObservation: BuildCompactObservation(unknownContext, null, null, null, null, null, null, null, null, null, null, null, null, null),
+                CompactObservation: BuildCompactObservation(unknownContext, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null),
                 Combat: null,
                 Map: null,
                 Rewards: null,
                 CardReward: null,
                 Event: null,
+                FakeMerchant: null,
                 Shop: null,
                 RestSite: null,
                 Treasure: null,
                 CardSelection: null,
                 BundleSelection: null,
                 RelicSelection: null,
+                CrystalSphere: null,
                 Overlay: null);
         }
 
@@ -100,12 +107,14 @@ internal sealed class GameSnapshotBuilder
         CombatStateSnapshot? combat = null;
         MapStateSnapshot? map = null;
         EventStateSnapshot? eventState = null;
+        FakeMerchantStateSnapshot? fakeMerchant = null;
         ShopStateSnapshot? shop = null;
         RestSiteStateSnapshot? restSite = null;
         TreasureStateSnapshot? treasure = null;
         OverlayStateSnapshot? overlay = null;
         BundleSelectionStateSnapshot? bundleSelection = null;
         RelicSelectionStateSnapshot? relicSelection = null;
+        CrystalSphereStateSnapshot? crystalSphere = null;
 
         if (topOverlay is NCardGridSelectionScreen gridSelection)
         {
@@ -131,6 +140,12 @@ internal sealed class GameSnapshotBuilder
             contextOverlayType = relicSelectionScreen.GetType().Name;
             relicSelection = BuildRelicSelectionState(relicSelectionScreen);
         }
+        else if (topOverlay is NCrystalSphereScreen crystalSphereScreen)
+        {
+            stateType = "crystal_sphere";
+            contextOverlayType = crystalSphereScreen.GetType().Name;
+            crystalSphere = BuildCrystalSphereState(crystalSphereScreen);
+        }
         else if (!mapIsOpen && topOverlay is NCardRewardSelectionScreen cardRewardSelection)
         {
             stateType = "card_reward";
@@ -155,8 +170,16 @@ internal sealed class GameSnapshotBuilder
         }
         else if (currentRoom is EventRoom eventRoom)
         {
-            stateType = "event";
-            eventState = BuildEventState(eventRoom);
+            if (eventRoom.CanonicalEvent is FakeMerchant)
+            {
+                stateType = "fake_merchant";
+                fakeMerchant = BuildFakeMerchantState(eventRoom);
+            }
+            else
+            {
+                stateType = "event";
+                eventState = BuildEventState(eventRoom);
+            }
         }
         else if (currentRoom is MerchantRoom merchantRoom)
         {
@@ -192,12 +215,14 @@ internal sealed class GameSnapshotBuilder
             rewards,
             cardReward,
             eventState,
+            fakeMerchant,
             shop,
             restSite,
             treasure,
             cardSelection,
             bundleSelection,
             relicSelection,
+            crystalSphere,
             overlay);
 
         return new GameSnapshot(
@@ -211,12 +236,14 @@ internal sealed class GameSnapshotBuilder
             Rewards: rewards,
             CardReward: cardReward,
             Event: eventState,
+            FakeMerchant: fakeMerchant,
             Shop: shop,
             RestSite: restSite,
             Treasure: treasure,
             CardSelection: cardSelection,
             BundleSelection: bundleSelection,
             RelicSelection: relicSelection,
+            CrystalSphere: crystalSphere,
             Overlay: overlay);
     }
 
@@ -332,7 +359,9 @@ internal sealed class GameSnapshotBuilder
                         ?? string.Empty,
                     Slot: slot,
                     TargetType: potion.TargetType.ToString(),
-                    Usage: potion.Usage.ToString()));
+                    Usage: potion.Usage.ToString(),
+                    CanUse: !potion.IsQueued && potion.Usage != PotionUsage.Automatic && potion.PassesCustomUsabilityCheck,
+                    CanDiscard: true));
             }
 
             slot++;
@@ -1005,6 +1034,132 @@ internal sealed class GameSnapshotBuilder
             Relics: relics);
     }
 
+    private static CrystalSphereStateSnapshot BuildCrystalSphereState(NCrystalSphereScreen screen)
+    {
+        List<NCrystalSphereCell> cells = GodotNodeSearch.FindAll<NCrystalSphereCell>(screen);
+        var cellSnapshots = new List<CrystalSphereCellSnapshot>();
+        var clickableCells = new List<CrystalSphereCellCoordSnapshot>();
+
+        foreach (NCrystalSphereCell cell in cells.OrderBy(cell => cell.Entity.Y).ThenBy(cell => cell.Entity.X))
+        {
+            string? itemType = null;
+            bool? isGood = null;
+            if (!cell.Entity.IsHidden && cell.Entity.Item is { } item)
+            {
+                itemType = item.GetType().Name;
+                isGood = item.IsGood;
+            }
+
+            cellSnapshots.Add(new CrystalSphereCellSnapshot(
+                X: cell.Entity.X,
+                Y: cell.Entity.Y,
+                IsHidden: cell.Entity.IsHidden,
+                IsClickable: cell.Entity.IsHidden && cell.Visible,
+                IsHighlighted: cell.Entity.IsHighlighted,
+                IsHovered: cell.Entity.IsHovered,
+                ItemType: itemType,
+                IsGood: isGood));
+
+            if (cell.Entity.IsHidden && cell.Visible)
+            {
+                clickableCells.Add(new CrystalSphereCellCoordSnapshot(cell.Entity.X, cell.Entity.Y));
+            }
+        }
+
+        CrystalSphereItemSnapshot[] revealedItems = cells
+            .Where(cell => !cell.Entity.IsHidden && cell.Entity.Item is not null)
+            .Select(cell => cell.Entity.Item!)
+            .Distinct()
+            .Select(item => new CrystalSphereItemSnapshot(
+                ItemType: item.GetType().Name,
+                X: item.Position.X,
+                Y: item.Position.Y,
+                Width: item.Size.X,
+                Height: item.Size.Y,
+                IsGood: item.IsGood))
+            .ToArray();
+
+        Control? bigButton = screen.GetNodeOrNull<Control>("%BigDivinationButton");
+        Control? smallButton = screen.GetNodeOrNull<Control>("%SmallDivinationButton");
+        bool bigActive = bigButton?.GetNodeOrNull<Control>("%Outline")?.Visible == true;
+        bool smallActive = smallButton?.GetNodeOrNull<Control>("%Outline")?.Visible == true;
+
+        return new CrystalSphereStateSnapshot(
+            InstructionsTitle: ReadControlText(screen.GetNodeOrNull<Control>("%InstructionsTitle")),
+            InstructionsDescription: ReadControlText(screen.GetNodeOrNull<Control>("%InstructionsDescription")),
+            GridWidth: cells.Count > 0 ? cells.Max(cell => cell.Entity.X) + 1 : 0,
+            GridHeight: cells.Count > 0 ? cells.Max(cell => cell.Entity.Y) + 1 : 0,
+            Tool: bigActive ? "big" : smallActive ? "small" : "none",
+            CanUseBigTool: bigButton?.Visible == true,
+            CanUseSmallTool: smallButton?.Visible == true,
+            DivinationsLeftText: ReadControlText(screen.GetNodeOrNull<Control>("%DivinationsLeft")),
+            CanProceed: screen.GetNodeOrNull<NProceedButton>("%ProceedButton")?.IsEnabled ?? false,
+            Cells: cellSnapshots,
+            ClickableCells: clickableCells,
+            RevealedItems: revealedItems);
+    }
+
+    private static FakeMerchantStateSnapshot BuildFakeMerchantState(EventRoom eventRoom)
+    {
+        var fakeMerchant = (FakeMerchant)(eventRoom.LocalMutableEvent ?? eventRoom.CanonicalEvent);
+        NFakeMerchant? fakeMerchantNode = NEventRoom.Instance is { } uiRoom
+            ? GodotNodeSearch.FindFirst<NFakeMerchant>(uiRoom)
+            : null;
+
+        if (!fakeMerchant.StartedFight &&
+            fakeMerchantNode is not null &&
+            GodotNodeSearch.FindFirst<NMerchantInventory>(fakeMerchantNode) is { IsOpen: false } &&
+            fakeMerchantNode.MerchantButton is { Visible: true, IsEnabled: true } merchantButton)
+        {
+            merchantButton.ForceClick();
+        }
+
+        bool canProceed = false;
+        if (fakeMerchantNode is not null)
+        {
+            canProceed = GodotNodeSearch.FindFirst<NProceedButton>(fakeMerchantNode)?.IsEnabled ?? false;
+        }
+        else if (fakeMerchant.StartedFight)
+        {
+            canProceed = true;
+        }
+
+        return new FakeMerchantStateSnapshot(
+            EventId: fakeMerchant.Id.Entry,
+            Title: ObservationText.SafeGetText(() => fakeMerchant.Title) ?? fakeMerchant.Id.Entry,
+            StartedFight: fakeMerchant.StartedFight,
+            Message: fakeMerchant.StartedFight ? "The fake merchant has been defeated. Proceed to map." : null,
+            CanProceed: canProceed,
+            Items: BuildFakeMerchantItems(fakeMerchant.Inventory));
+    }
+
+    private static IReadOnlyList<ShopItemEntrySnapshot> BuildFakeMerchantItems(MerchantInventory? inventory)
+    {
+        var items = new List<ShopItemEntrySnapshot>();
+        if (inventory is null)
+        {
+            return items;
+        }
+
+        int index = 0;
+        foreach (dynamic entry in inventory.RelicEntries)
+        {
+            if (entry.Model is RelicModel relic)
+            {
+                items.Add(new ShopItemEntrySnapshot(
+                    Index: index,
+                    Category: "relic",
+                    Price: entry.Cost,
+                    CanAfford: entry.EnoughGold,
+                    Title: ObservationText.SafeGetText(() => relic.Title) ?? relic.Id.Entry,
+                    Description: ObservationText.SafeGetText(() => relic.DynamicDescription)));
+                index++;
+            }
+        }
+
+        return items;
+    }
+
     private static EventStateSnapshot BuildEventState(EventRoom eventRoom)
     {
         var eventModel = eventRoom.CanonicalEvent;
@@ -1231,6 +1386,7 @@ internal sealed class GameSnapshotBuilder
             "menu" => ["/api/v1/context"],
             "map" => ["/api/v1/context", "/api/v1/map/summary", "/api/v1/actions", "/api/v1/player/summary"],
             "event" => ["/api/v1/context", "/api/v1/event", "/api/v1/actions", "/api/v1/player/summary"],
+            "fake_merchant" => ["/api/v1/context", "/api/v1/fake-merchant", "/api/v1/actions", "/api/v1/player/summary"],
             "shop" => ["/api/v1/context", "/api/v1/shop", "/api/v1/actions", "/api/v1/player/summary"],
             "rest_site" => ["/api/v1/context", "/api/v1/rest-site", "/api/v1/actions", "/api/v1/player/summary"],
             "treasure" => ["/api/v1/context", "/api/v1/treasure", "/api/v1/actions", "/api/v1/player/summary"],
@@ -1239,6 +1395,7 @@ internal sealed class GameSnapshotBuilder
             "card_select" => ["/api/v1/context", "/api/v1/card-selection", "/api/v1/actions", "/api/v1/player/deck", "/api/v1/knowledge/current"],
             "bundle_select" => ["/api/v1/context", "/api/v1/bundle-selection", "/api/v1/actions", "/api/v1/knowledge/current"],
             "relic_select" => ["/api/v1/context", "/api/v1/relic-selection", "/api/v1/actions", "/api/v1/player/relics", "/api/v1/knowledge/relics"],
+            "crystal_sphere" => ["/api/v1/context", "/api/v1/crystal-sphere", "/api/v1/actions"],
             "overlay" => ["/api/v1/context", "/api/v1/overlay"],
             "monster" or "elite" or "boss" =>
             [
@@ -1261,12 +1418,14 @@ internal sealed class GameSnapshotBuilder
         RewardsStateSnapshot? rewards,
         CardRewardStateSnapshot? cardReward,
         EventStateSnapshot? eventState,
+        FakeMerchantStateSnapshot? fakeMerchant,
         ShopStateSnapshot? shop,
         RestSiteStateSnapshot? restSite,
         TreasureStateSnapshot? treasure,
         CardSelectionStateSnapshot? cardSelection,
         BundleSelectionStateSnapshot? bundleSelection,
         RelicSelectionStateSnapshot? relicSelection,
+        CrystalSphereStateSnapshot? crystalSphere,
         OverlayStateSnapshot? overlay)
     {
         var facts = new List<string>();
@@ -1314,6 +1473,13 @@ internal sealed class GameSnapshotBuilder
                     facts.Add($"Event '{eventState.Title}' with {eventState.Options.Count} options.");
                 }
                 break;
+            case "fake_merchant":
+                goal = "Buy from the fake merchant or proceed when done.";
+                if (fakeMerchant is not null)
+                {
+                    facts.Add($"Fake merchant items {fakeMerchant.Items.Count}, started fight {fakeMerchant.StartedFight}, can proceed {fakeMerchant.CanProceed}.");
+                }
+                break;
             case "shop":
                 goal = "Evaluate affordable purchases without re-reading the whole deck.";
                 if (player is not null)
@@ -1354,6 +1520,13 @@ internal sealed class GameSnapshotBuilder
             case "relic_select":
                 goal = "Choose or skip a relic selection overlay.";
                 facts.Add($"Visible relic choices: {relicSelection?.Relics.Count ?? 0}.");
+                break;
+            case "crystal_sphere":
+                goal = "Resolve the Crystal Sphere minigame.";
+                if (crystalSphere is not null)
+                {
+                    facts.Add($"Crystal Sphere grid {crystalSphere.GridWidth}x{crystalSphere.GridHeight}, clickable cells {crystalSphere.ClickableCells.Count}, tool {crystalSphere.Tool}, can proceed {crystalSphere.CanProceed}.");
+                }
                 break;
             case "treasure":
                 goal = "Pick a relic from the treasure screen.";

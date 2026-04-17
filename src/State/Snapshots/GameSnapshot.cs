@@ -11,12 +11,14 @@ internal sealed record GameSnapshot(
     RewardsStateSnapshot? Rewards,
     CardRewardStateSnapshot? CardReward,
     EventStateSnapshot? Event,
+    FakeMerchantStateSnapshot? FakeMerchant,
     ShopStateSnapshot? Shop,
     RestSiteStateSnapshot? RestSite,
     TreasureStateSnapshot? Treasure,
     CardSelectionStateSnapshot? CardSelection,
     BundleSelectionStateSnapshot? BundleSelection,
     RelicSelectionStateSnapshot? RelicSelection,
+    CrystalSphereStateSnapshot? CrystalSphere,
     OverlayStateSnapshot? Overlay);
 
 internal sealed record ContextSnapshot(
@@ -105,7 +107,9 @@ internal sealed record PotionEntrySnapshot(
     string Description,
     int Slot,
     string TargetType,
-    string Usage);
+    string Usage,
+    bool CanUse,
+    bool CanDiscard);
 
 internal sealed record CombatStateSnapshot(
     string RoomType,
@@ -256,6 +260,14 @@ internal sealed record EventStateSnapshot(
     bool InDialogue,
     IReadOnlyList<EventOptionEntrySnapshot> Options);
 
+internal sealed record FakeMerchantStateSnapshot(
+    string EventId,
+    string Title,
+    bool StartedFight,
+    string? Message,
+    bool CanProceed,
+    IReadOnlyList<ShopItemEntrySnapshot> Items);
+
 internal sealed record EventOptionEntrySnapshot(
     int Index,
     string Title,
@@ -324,6 +336,42 @@ internal sealed record RelicSelectionStateSnapshot(
     string? Prompt,
     bool CanSkip,
     IReadOnlyList<RelicChoiceEntrySnapshot> Relics);
+
+internal sealed record CrystalSphereStateSnapshot(
+    string? InstructionsTitle,
+    string? InstructionsDescription,
+    int GridWidth,
+    int GridHeight,
+    string Tool,
+    bool CanUseBigTool,
+    bool CanUseSmallTool,
+    string? DivinationsLeftText,
+    bool CanProceed,
+    IReadOnlyList<CrystalSphereCellSnapshot> Cells,
+    IReadOnlyList<CrystalSphereCellCoordSnapshot> ClickableCells,
+    IReadOnlyList<CrystalSphereItemSnapshot> RevealedItems);
+
+internal sealed record CrystalSphereCellSnapshot(
+    int X,
+    int Y,
+    bool IsHidden,
+    bool IsClickable,
+    bool IsHighlighted,
+    bool IsHovered,
+    string? ItemType,
+    bool? IsGood);
+
+internal sealed record CrystalSphereCellCoordSnapshot(
+    int X,
+    int Y);
+
+internal sealed record CrystalSphereItemSnapshot(
+    string ItemType,
+    int X,
+    int Y,
+    int Width,
+    int Height,
+    bool IsGood);
 
 internal sealed record OverlayStateSnapshot(
     string ScreenType,

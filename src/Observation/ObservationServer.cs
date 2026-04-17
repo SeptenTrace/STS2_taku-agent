@@ -178,8 +178,10 @@ internal static class ObservationServer
                         "/api/v1/actions",
                         "/api/v1/knowledge/current",
                         "/api/v1/combat/actions",
+                        "/api/v1/fake-merchant",
                         "/api/v1/bundle-selection",
                         "/api/v1/relic-selection",
+                        "/api/v1/crystal-sphere",
                         "/api/v1/overlay"
                     }
                 });
@@ -289,6 +291,9 @@ internal static class ObservationServer
                 case "/api/v1/event":
                     RequireSection(response, snapshot.Event, "Event state is unavailable.");
                     return;
+                case "/api/v1/fake-merchant":
+                    RequireSection(response, snapshot.FakeMerchant, "Fake merchant state is unavailable.");
+                    return;
                 case "/api/v1/shop":
                     RequireSection(response, snapshot.Shop, "Shop state is unavailable.");
                     return;
@@ -309,6 +314,9 @@ internal static class ObservationServer
                     return;
                 case "/api/v1/relic-selection":
                     RequireSection(response, snapshot.RelicSelection, "Relic selection state is unavailable.");
+                    return;
+                case "/api/v1/crystal-sphere":
+                    RequireSection(response, snapshot.CrystalSphere, "Crystal Sphere state is unavailable.");
                     return;
                 case "/api/v1/treasure":
                     RequireSection(response, snapshot.Treasure, "Treasure state is unavailable.");

@@ -153,6 +153,15 @@ export interface EventResponse {
   options: EventOptionResponse[];
 }
 
+export interface FakeMerchantResponse {
+  eventId: string;
+  title: string;
+  startedFight: boolean;
+  message?: string;
+  canProceed: boolean;
+  items: ShopItemResponse[];
+}
+
 export interface CardRewardCard {
   index: number;
   id: string;
@@ -235,6 +244,46 @@ export interface RelicSelectionResponse {
   prompt?: string;
   canSkip: boolean;
   relics: TreasureChoiceResponse[];
+}
+
+export interface CrystalSphereCellResponse {
+  x: number;
+  y: number;
+  isHidden: boolean;
+  isClickable: boolean;
+  isHighlighted: boolean;
+  isHovered: boolean;
+  itemType?: string;
+  isGood?: boolean;
+}
+
+export interface CrystalSphereCellCoordResponse {
+  x: number;
+  y: number;
+}
+
+export interface CrystalSphereItemResponse {
+  itemType: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isGood: boolean;
+}
+
+export interface CrystalSphereResponse {
+  instructionsTitle?: string;
+  instructionsDescription?: string;
+  gridWidth: number;
+  gridHeight: number;
+  tool: string;
+  canUseBigTool: boolean;
+  canUseSmallTool: boolean;
+  divinationsLeftText?: string;
+  canProceed: boolean;
+  cells: CrystalSphereCellResponse[];
+  clickableCells: CrystalSphereCellCoordResponse[];
+  revealedItems: CrystalSphereItemResponse[];
 }
 
 export interface OverlayResponse {

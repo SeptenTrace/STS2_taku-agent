@@ -11,6 +11,7 @@ internal static class ActionSurfaceBuilder
             "monster" or "elite" or "boss" => BuildCombatActions(snapshot),
             "map" => BuildMapActions(snapshot),
             "event" => BuildEventActions(snapshot),
+            "fake_merchant" => BuildFakeMerchantActions(snapshot),
             "shop" => BuildShopActions(snapshot),
             "rest_site" => BuildRestSiteActions(snapshot),
             "rewards" => BuildRewardsActions(snapshot),
@@ -18,6 +19,7 @@ internal static class ActionSurfaceBuilder
             "card_select" => BuildCardSelectionActions(snapshot),
             "bundle_select" => BuildBundleSelectionActions(snapshot),
             "relic_select" => BuildRelicSelectionActions(snapshot),
+            "crystal_sphere" => BuildCrystalSphereActions(snapshot),
             "treasure" => BuildTreasureActions(snapshot),
             _ => new ActionSurfaceSnapshot(snapshot.Context.StateType, snapshot.CompactObservation.Goal, Array.Empty<SceneActionSnapshot>())
         };
@@ -60,7 +62,7 @@ internal static class ActionSurfaceBuilder
 
     private static ActionSurfaceSnapshot BuildMapActions(GameSnapshot snapshot)
     {
-        SceneActionSnapshot[] actions = snapshot.Map?.NextOptions
+        var actions = snapshot.Map?.NextOptions
             .Select(option => new SceneActionSnapshot(
                 ActionType: "choose_map_node",
                 Index: option.Index,
@@ -70,7 +72,9 @@ internal static class ActionSurfaceBuilder
                 Parameters: [new ActionArgumentSnapshot("index", option.Index.ToString())],
                 TargetOptions: Array.Empty<string>(),
                 Tags: [option.Type.ToLowerInvariant()]))
-            .ToArray() ?? Array.Empty<SceneActionSnapshot>();
+            .ToList() ?? new List<SceneActionSnapshot>();
+
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
 
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Choose the next map node.", actions);
     }
@@ -107,7 +111,47 @@ internal static class ActionSurfaceBuilder
             }
         }
 
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
+
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Choose one visible event option.", actions);
+    }
+
+    private static ActionSurfaceSnapshot BuildFakeMerchantActions(GameSnapshot snapshot)
+    {
+        var actions = new List<SceneActionSnapshot>();
+
+        if (snapshot.FakeMerchant is not null)
+        {
+            foreach (ShopItemEntrySnapshot item in snapshot.FakeMerchant.Items)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "shop_purchase",
+                    Index: item.Index,
+                    Label: item.Title,
+                    Description: $"{item.Category} for {item.Price} gold. {item.Description}".Trim(),
+                    IsAvailable: item.CanAfford,
+                    Parameters: [new ActionArgumentSnapshot("index", item.Index.ToString())],
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: BuildTags("fake_merchant", item.Category, item.CanAfford ? "affordable" : "too_expensive")));
+            }
+
+            if (snapshot.FakeMerchant.CanProceed)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "proceed",
+                    Index: null,
+                    Label: "Leave fake merchant",
+                    Description: "Proceed from the fake merchant event.",
+                    IsAvailable: true,
+                    Parameters: Array.Empty<ActionArgumentSnapshot>(),
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["proceed", "fake_merchant"]));
+            }
+        }
+
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
+
+        return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Buy a relic, throw a potion, or proceed.", actions);
     }
 
     private static ActionSurfaceSnapshot BuildShopActions(GameSnapshot snapshot)
@@ -142,6 +186,8 @@ internal static class ActionSurfaceBuilder
                     Tags: ["proceed"]));
             }
         }
+
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
 
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Buy an item or leave the shop.", actions);
     }
@@ -179,6 +225,8 @@ internal static class ActionSurfaceBuilder
             }
         }
 
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
+
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Choose an enabled rest-site option.", actions);
     }
 
@@ -215,6 +263,8 @@ internal static class ActionSurfaceBuilder
             }
         }
 
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
+
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Claim a reward or proceed.", actions);
     }
 
@@ -250,6 +300,8 @@ internal static class ActionSurfaceBuilder
                     Tags: ["skip"]));
             }
         }
+
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
 
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Choose a card reward or skip.", actions);
     }
@@ -300,6 +352,8 @@ internal static class ActionSurfaceBuilder
             }
         }
 
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
+
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Resolve the current card selection.", actions);
     }
 
@@ -335,6 +389,8 @@ internal static class ActionSurfaceBuilder
                     Tags: ["proceed"]));
             }
         }
+
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
 
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Claim a treasure relic or proceed.", actions);
     }
@@ -385,6 +441,8 @@ internal static class ActionSurfaceBuilder
             }
         }
 
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
+
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Resolve the current bundle selection.", actions);
     }
 
@@ -421,7 +479,124 @@ internal static class ActionSurfaceBuilder
             }
         }
 
+        AppendOutOfCombatPotionActions(actions, snapshot.Player);
+
         return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Resolve the current relic choice.", actions);
+    }
+
+    private static ActionSurfaceSnapshot BuildCrystalSphereActions(GameSnapshot snapshot)
+    {
+        var actions = new List<SceneActionSnapshot>();
+
+        if (snapshot.CrystalSphere is not null)
+        {
+            if (snapshot.CrystalSphere.CanUseBigTool)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "crystal_sphere_set_tool",
+                    Index: null,
+                    Label: "Use big tool",
+                    Description: "Switch Crystal Sphere to the big divination tool.",
+                    IsAvailable: true,
+                    Parameters: [new ActionArgumentSnapshot("tool", "big")],
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["crystal_sphere", "tool"]));
+            }
+
+            if (snapshot.CrystalSphere.CanUseSmallTool)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "crystal_sphere_set_tool",
+                    Index: null,
+                    Label: "Use small tool",
+                    Description: "Switch Crystal Sphere to the small divination tool.",
+                    IsAvailable: true,
+                    Parameters: [new ActionArgumentSnapshot("tool", "small")],
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["crystal_sphere", "tool"]));
+            }
+
+            foreach (CrystalSphereCellCoordSnapshot cell in snapshot.CrystalSphere.ClickableCells)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "crystal_sphere_click_cell",
+                    Index: null,
+                    Label: $"Cell ({cell.X}, {cell.Y})",
+                    Description: "Reveal this Crystal Sphere cell.",
+                    IsAvailable: true,
+                    Parameters: [
+                        new ActionArgumentSnapshot("x", cell.X.ToString()),
+                        new ActionArgumentSnapshot("y", cell.Y.ToString())
+                    ],
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["crystal_sphere", "cell"]));
+            }
+
+            if (snapshot.CrystalSphere.CanProceed)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "crystal_sphere_proceed",
+                    Index: null,
+                    Label: "Proceed",
+                    Description: "Finish the Crystal Sphere minigame.",
+                    IsAvailable: true,
+                    Parameters: Array.Empty<ActionArgumentSnapshot>(),
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["crystal_sphere", "proceed"]));
+            }
+        }
+
+        return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Resolve the Crystal Sphere minigame.", actions);
+    }
+
+    private static void AppendOutOfCombatPotionActions(ICollection<SceneActionSnapshot> actions, PlayerStateSnapshot? player)
+    {
+        if (player is null)
+        {
+            return;
+        }
+
+        foreach (PotionEntrySnapshot potion in player.Potions)
+        {
+            if (potion.CanUse && !string.Equals(potion.Usage, "CombatOnly", StringComparison.OrdinalIgnoreCase))
+            {
+                bool requiresTarget = potion.TargetType.Equals("AnyEnemy", StringComparison.OrdinalIgnoreCase);
+                var parameters = new List<ActionArgumentSnapshot> { new("index", potion.Slot.ToString()) };
+                var targetOptions = Array.Empty<string>();
+
+                if (requiresTarget)
+                {
+                    parameters.Add(new ActionArgumentSnapshot("target", "required"));
+                }
+                else if (potion.TargetType is "Self" or "AnyAlly" or "AnyPlayer")
+                {
+                    targetOptions = ["self"];
+                }
+
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "use_potion",
+                    Index: potion.Slot,
+                    Label: potion.Title,
+                    Description: potion.Description,
+                    IsAvailable: !requiresTarget,
+                    Parameters: parameters,
+                    TargetOptions: targetOptions,
+                    Tags: BuildTags("potion", "use", potion.Usage.ToLowerInvariant())));
+            }
+
+            if (potion.CanDiscard)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "discard_potion",
+                    Index: potion.Slot,
+                    Label: $"Discard {potion.Title}",
+                    Description: "Discard this potion to free the slot.",
+                    IsAvailable: true,
+                    Parameters: [new ActionArgumentSnapshot("index", potion.Slot.ToString())],
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["potion", "discard"]));
+            }
+        }
     }
 
     private static string[] BuildTags(params string[] values)

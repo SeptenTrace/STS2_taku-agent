@@ -31,6 +31,7 @@ internal static class ObservationDeltaBuilder
         CompareCombat(previous.Combat, current.Combat, changedSections, facts);
         CompareMap(previous.Map, current.Map, changedSections, facts);
         CompareEvent(previous.Event, current.Event, changedSections, facts);
+        CompareFakeMerchant(previous.FakeMerchant, current.FakeMerchant, changedSections, facts);
         CompareShop(previous.Shop, current.Shop, changedSections, facts);
         CompareRewards(previous.Rewards, current.Rewards, changedSections, facts);
         CompareCardReward(previous.CardReward, current.CardReward, changedSections, facts);
@@ -39,6 +40,7 @@ internal static class ObservationDeltaBuilder
         CompareCardSelection(previous.CardSelection, current.CardSelection, changedSections, facts);
         CompareBundleSelection(previous.BundleSelection, current.BundleSelection, changedSections, facts);
         CompareRelicSelection(previous.RelicSelection, current.RelicSelection, changedSections, facts);
+        CompareCrystalSphere(previous.CrystalSphere, current.CrystalSphere, changedSections, facts);
         CompareOverlay(previous.Overlay, current.Overlay, changedSections, facts);
 
         if (!changed && facts.Count == 0)
@@ -231,6 +233,25 @@ internal static class ObservationDeltaBuilder
         }
     }
 
+    private static void CompareFakeMerchant(FakeMerchantStateSnapshot? previous, FakeMerchantStateSnapshot? current, ISet<string> changedSections, ICollection<string> facts)
+    {
+        if (previous is null || current is null)
+        {
+            return;
+        }
+
+        int previousAffordable = previous.Items.Count(item => item.CanAfford);
+        int currentAffordable = current.Items.Count(item => item.CanAfford);
+        if (previous.StartedFight != current.StartedFight ||
+            previous.Items.Count != current.Items.Count ||
+            previousAffordable != currentAffordable ||
+            previous.CanProceed != current.CanProceed)
+        {
+            changedSections.Add("fake_merchant");
+            facts.Add($"Fake merchant changed. Items: {current.Items.Count}, affordable: {currentAffordable}, started fight: {current.StartedFight}.");
+        }
+    }
+
     private static void CompareRewards(RewardsStateSnapshot? previous, RewardsStateSnapshot? current, ISet<string> changedSections, ICollection<string> facts)
     {
         if (previous is null || current is null)
@@ -360,6 +381,24 @@ internal static class ObservationDeltaBuilder
         {
             changedSections.Add("overlay");
             facts.Add($"Overlay changed to '{current.ScreenType}'.");
+        }
+    }
+
+    private static void CompareCrystalSphere(CrystalSphereStateSnapshot? previous, CrystalSphereStateSnapshot? current, ISet<string> changedSections, ICollection<string> facts)
+    {
+        if (previous is null || current is null)
+        {
+            return;
+        }
+
+        string previousClickable = string.Join("|", previous.ClickableCells.Select(cell => $"{cell.X}:{cell.Y}"));
+        string currentClickable = string.Join("|", current.ClickableCells.Select(cell => $"{cell.X}:{cell.Y}"));
+        if (!string.Equals(previousClickable, currentClickable, StringComparison.Ordinal) ||
+            !string.Equals(previous.Tool, current.Tool, StringComparison.Ordinal) ||
+            previous.CanProceed != current.CanProceed)
+        {
+            changedSections.Add("crystal_sphere");
+            facts.Add($"Crystal Sphere changed. Clickable cells: {current.ClickableCells.Count}, tool: {current.Tool}, can proceed: {current.CanProceed}.");
         }
     }
 

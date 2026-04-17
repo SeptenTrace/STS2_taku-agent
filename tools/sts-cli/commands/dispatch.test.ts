@@ -169,6 +169,24 @@ test("dispatch bundle-selection uses the typed bundle endpoint", async () => {
   assert.equal((output.jsonValues[0] as { screenType: string }).screenType, "bundle");
 });
 
+test("dispatch fake-merchant uses the typed fake merchant endpoint", async () => {
+  const client = new MockClient({
+    "/api/v1/fake-merchant": {
+      eventId: "FAKE_MERCHANT",
+      title: "Fake Merchant",
+      startedFight: false,
+      canProceed: true,
+      items: []
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "fake-merchant", [], output);
+
+  assert.deepEqual(client.requests.map((entry) => entry.path), ["/api/v1/fake-merchant"]);
+  assert.equal((output.jsonValues[0] as { eventId: string }).eventId, "FAKE_MERCHANT");
+});
+
 test("dispatch rejects unknown subcommands with CliError", async () => {
   const client = new MockClient({});
   const output = new MockOutput();

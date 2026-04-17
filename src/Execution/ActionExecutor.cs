@@ -11,12 +11,14 @@ using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.GameActions;
 using MegaCrit.Sts2.Core.Map;
 using MegaCrit.Sts2.Core.Models;
+using MegaCrit.Sts2.Core.Models.Events;
 using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Cards;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Events;
 using MegaCrit.Sts2.Core.Nodes.Events.Custom;
+using MegaCrit.Sts2.Core.Nodes.Events.Custom.CrystalSphere;
 using MegaCrit.Sts2.Core.Nodes.GodotExtensions;
 using MegaCrit.Sts2.Core.Nodes.Relics;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
@@ -81,6 +83,9 @@ internal static class ActionExecutor
                 "cancel_bundle_selection" => ExecuteCancelBundleSelection(),
                 "select_relic" => ExecuteSelectRelic(parameters),
                 "skip_relic_selection" => ExecuteSkipRelicSelection(),
+                "crystal_sphere_set_tool" => ExecuteCrystalSphereSetTool(parameters),
+                "crystal_sphere_click_cell" => ExecuteCrystalSphereClickCell(parameters),
+                "crystal_sphere_proceed" => ExecuteCrystalSphereProceed(),
                 "claim_treasure_relic" => ExecuteClaimTreasureRelic(parameters),
                 _ => ActionExecutionOutcome.Fail($"Unknown action type '{actionType}'.")
             };
@@ -416,18 +421,40 @@ internal static class ActionExecutor
 
     private static ActionExecutionOutcome ExecuteShopPurchase(Player player, IReadOnlyDictionary<string, JsonElement> parameters)
     {
-        if (player.RunState.CurrentRoom is not MerchantRoom merchantRoom)
+        MerchantInventory? inventory = null;
+
+        if (player.RunState.CurrentRoom is MerchantRoom merchantRoom)
+        {
+            NMerchantRoom? merchantUi = NMerchantRoom.Instance;
+            if (merchantUi?.Inventory is not null && !merchantUi.Inventory.IsOpen)
+            {
+                merchantUi.OpenInventory();
+            }
+
+            inventory = merchantRoom.Inventory;
+        }
+        else if (player.RunState.CurrentRoom is EventRoom eventRoom &&
+                 eventRoom.CanonicalEvent is FakeMerchant &&
+                 (eventRoom.LocalMutableEvent ?? eventRoom.CanonicalEvent) is FakeMerchant fakeMerchant)
+        {
+            if (!fakeMerchant.StartedFight && NEventRoom.Instance is { } eventUi)
+            {
+                NFakeMerchant? fakeMerchantUi = GodotNodeSearch.FindFirst<NFakeMerchant>(eventUi);
+                if (fakeMerchantUi is not null &&
+                    GodotNodeSearch.FindFirst<NMerchantInventory>(fakeMerchantUi) is { IsOpen: false } &&
+                    fakeMerchantUi.MerchantButton is { Visible: true, IsEnabled: true } merchantButton)
+                {
+                    merchantButton.ForceClick();
+                }
+            }
+
+            inventory = fakeMerchant.Inventory;
+        }
+        else
         {
             return ActionExecutionOutcome.Fail("Shop is not active.");
         }
 
-        NMerchantRoom? merchantUi = NMerchantRoom.Instance;
-        if (merchantUi?.Inventory is not null && !merchantUi.Inventory.IsOpen)
-        {
-            merchantUi.OpenInventory();
-        }
-
-        MerchantInventory? inventory = merchantRoom.Inventory;
         if (inventory is null)
         {
             return ActionExecutionOutcome.Fail("Shop inventory is not ready.");
@@ -562,6 +589,30 @@ internal static class ActionExecutor
             {
                 merchantRoom.ProceedButton.ForceClick();
                 return ActionExecutionOutcome.Ok("Proceeded from shop.");
+            }
+        }
+
+        if (NEventRoom.Instance is { } eventRoom)
+        {
+            NFakeMerchant? fakeMerchant = GodotNodeSearch.FindFirst<NFakeMerchant>(eventRoom);
+            if (fakeMerchant is not null)
+            {
+                NMerchantInventory? inventory = GodotNodeSearch.FindFirst<NMerchantInventory>(fakeMerchant);
+                if (inventory is { IsOpen: true })
+                {
+                    NBackButton? backButton = GodotNodeSearch.FindFirst<NBackButton>(fakeMerchant);
+                    if (backButton is { IsEnabled: true })
+                    {
+                        backButton.ForceClick();
+                    }
+                }
+
+                NProceedButton? proceedButton = GodotNodeSearch.FindFirst<NProceedButton>(fakeMerchant);
+                if (proceedButton is { IsEnabled: true })
+                {
+                    proceedButton.ForceClick();
+                    return ActionExecutionOutcome.Ok("Proceeded from fake merchant.");
+                }
             }
         }
 
@@ -855,6 +906,82 @@ internal static class ActionExecutor
 
         skipButton.ForceClick();
         return ActionExecutionOutcome.Ok("Skipped relic selection.");
+    }
+
+    private static ActionExecutionOutcome ExecuteCrystalSphereSetTool(IReadOnlyDictionary<string, JsonElement> parameters)
+    {
+        if (NOverlayStack.Instance?.Peek() is not NCrystalSphereScreen screen)
+        {
+            return ActionExecutionOutcome.Fail("Crystal Sphere screen is not open.");
+        }
+
+        string? tool = GetOptionalString(parameters, "tool");
+        NClickableControl? button = tool switch
+        {
+            "big" => screen.GetNodeOrNull<NClickableControl>("%BigDivinationButton"),
+            "small" => screen.GetNodeOrNull<NClickableControl>("%SmallDivinationButton"),
+            _ => null
+        };
+
+        if (button is null)
+        {
+            return ActionExecutionOutcome.Fail($"Unknown Crystal Sphere tool '{tool}'.");
+        }
+
+        if (!button.Visible || !button.IsEnabled)
+        {
+            return ActionExecutionOutcome.Fail($"Crystal Sphere tool '{tool}' is not available.");
+        }
+
+        button.ForceClick();
+        return ActionExecutionOutcome.Ok($"Set Crystal Sphere tool to '{tool}'.");
+    }
+
+    private static ActionExecutionOutcome ExecuteCrystalSphereClickCell(IReadOnlyDictionary<string, JsonElement> parameters)
+    {
+        if (NOverlayStack.Instance?.Peek() is not NCrystalSphereScreen screen)
+        {
+            return ActionExecutionOutcome.Fail("Crystal Sphere screen is not open.");
+        }
+
+        int x = GetRequiredInt(parameters, "x");
+        int y = GetRequiredInt(parameters, "y");
+        if (x < 0 || y < 0)
+        {
+            return ActionExecutionOutcome.Fail("Missing 'x' or 'y'.");
+        }
+
+        NCrystalSphereCell? cell = GodotNodeSearch.FindAll<NCrystalSphereCell>(screen)
+            .FirstOrDefault(cell => cell.Entity.X == x && cell.Entity.Y == y);
+        if (cell is null)
+        {
+            return ActionExecutionOutcome.Fail($"Crystal Sphere cell ({x}, {y}) was not found.");
+        }
+
+        if (!cell.Entity.IsHidden || !cell.Visible)
+        {
+            return ActionExecutionOutcome.Fail($"Crystal Sphere cell ({x}, {y}) is not clickable.");
+        }
+
+        cell.EmitSignal(NClickableControl.SignalName.Released, cell);
+        return ActionExecutionOutcome.Ok($"Clicked Crystal Sphere cell ({x}, {y}).");
+    }
+
+    private static ActionExecutionOutcome ExecuteCrystalSphereProceed()
+    {
+        if (NOverlayStack.Instance?.Peek() is not NCrystalSphereScreen screen)
+        {
+            return ActionExecutionOutcome.Fail("Crystal Sphere screen is not open.");
+        }
+
+        NProceedButton? proceedButton = screen.GetNodeOrNull<NProceedButton>("%ProceedButton");
+        if (proceedButton is not { IsEnabled: true })
+        {
+            return ActionExecutionOutcome.Fail("Crystal Sphere proceed button is not enabled.");
+        }
+
+        proceedButton.ForceClick();
+        return ActionExecutionOutcome.Ok("Proceeded from Crystal Sphere.");
     }
 
     private static ActionExecutionOutcome ExecuteClaimTreasureRelic(IReadOnlyDictionary<string, JsonElement> parameters)
