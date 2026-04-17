@@ -18,9 +18,7 @@ import type {
   ShopResponse,
   TreasureResponse
 } from "../api-types.ts";
-import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
 import type { RequestClient } from "../core/client.ts";
-import { waitForCondition } from "./wait.ts";
 
 type RoomStateData =
   | { kind: "combat"; path: "/api/v1/combat/summary"; data: CombatSummaryResponse }
@@ -37,13 +35,6 @@ type RoomStateData =
   | { kind: "rest_site"; path: "/api/v1/rest-site"; data: RestSiteResponse }
   | { kind: "treasure"; path: "/api/v1/treasure"; data: TreasureResponse }
   | { kind: "overlay"; path: "/api/v1/overlay"; data: OverlayResponse };
-
-export interface PlayerReadyResult {
-  condition: "player_ready";
-  matched: true;
-  context: ContextResponse;
-  combat?: CombatSummaryResponse;
-}
 
 export interface ClaimAllSafeResult {
   context: ContextResponse;
@@ -63,16 +54,6 @@ export interface RoomSummaryResult {
   playerSummary: PlayerSummaryResponse;
   actions: ActionSurfaceResponse;
   stateData?: RoomStateData;
-}
-
-export async function waitForPlayerReady(client: RequestClient): Promise<PlayerReadyResult> {
-  const result = await waitForCondition(client, "player_ready", DEFAULT_WAIT_TIMEOUT_SECONDS);
-  return {
-    condition: "player_ready",
-    matched: true,
-    context: result.context,
-    combat: result.combat
-  };
 }
 
 function isSafeReward(item: RewardsResponse["items"][number]): boolean {

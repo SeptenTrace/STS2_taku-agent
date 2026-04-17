@@ -1,41 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildRoomSummary, claimAllSafeRewards, waitForPlayerReady } from "./combo.ts";
+import { buildRoomSummary, claimAllSafeRewards } from "./combo.ts";
 import { MockClient } from "../test-helpers/mock-client.ts";
-
-test("waitForPlayerReady resolves on rewards screens", async () => {
-  const client = new MockClient({
-    "/api/v1/context": [
-      {
-        stateType: "rewards",
-        roomType: "Monster"
-      },
-      {
-        stateType: "rewards",
-        roomType: "Monster"
-      }
-    ],
-    "/api/v1/actions": [
-      {
-        stateType: "rewards",
-        actions: [
-          { actionType: "proceed", label: "Proceed" }
-        ]
-      },
-      {
-        stateType: "rewards",
-        actions: [
-          { actionType: "proceed", label: "Proceed" }
-        ]
-      }
-    ]
-  });
-
-  const result = await waitForPlayerReady(client);
-  assert.equal(result.condition, "player_ready");
-  assert.equal(result.context.stateType, "rewards");
-});
 
 test("claimAllSafeRewards claims non-card rewards and stops at card rewards", async () => {
   const client = new MockClient({

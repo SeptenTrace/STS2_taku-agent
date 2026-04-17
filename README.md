@@ -19,9 +19,15 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `build_release.sh`: build a shareable release package
 
 ## Current Status
-Phase 1 is complete as a read-only observation layer, and Phase 2 is now implemented and validated in live gameplay on top of the same low-token contract.
+Phase 1 is complete as the observation layer, and Phase 2 is now implemented and validated in live gameplay on top of the same low-token contract.
 
 The repository includes a working runtime capture pipeline, a low-token localhost observation server, a repo-local CLI, semantic action surfaces, incremental delta reads, a current-context knowledge cache, and a Phase 2 execution endpoint that returns linked observation deltas plus recovery guidance.
+
+Recent reliability work also added:
+
+- stable-vs-transitioning state signals on `context`
+- stricter action hiding during transient or non-actionable frames
+- a repo-local wait primitive and `exec --wait-for ...` follow-up flow
 
 ## Current Design
 
@@ -125,6 +131,17 @@ Observation server:
 - `http://localhost:15527/api/v1/crystal-sphere`
 - `http://localhost:15527/api/v1/overlay`
 
+`/api/v1/context` now includes:
+- `stateType`
+- `roomType`
+- `overlayType`
+- `isStable`
+- `isTransitioning`
+- `recommendedQueries`
+
+`isStable=true` means the current screen is ready for agent decisions.
+`isTransitioning=true` means the mod is intentionally treating the current frame as an in-between state, and `/api/v1/actions` may be empty until the room settles.
+
 Local CLI:
 - `./sts ping`
 - `./sts next`
@@ -141,6 +158,8 @@ Local CLI:
 - `./sts relic-selection`
 - `./sts crystal-sphere`
 - `./sts overlay`
+- `./sts wait player-ready`
+- `./sts exec proceed --wait-for map`
 - `./sts get /api/v1/state/full`
 
 CLI implementation notes:
@@ -155,7 +174,14 @@ CLI implementation notes:
 Higher-level CLI helpers:
 - `./sts room summary` returns one combined snapshot for the current actionable room
 - `./sts wait player-ready` waits for a stable player-actionable state or player combat turn
+- `./sts wait rewards` / `./sts wait map` / `./sts wait monster` wait for a stable matching room state, not just a one-frame context match
+- `./sts exec ACTION ... --wait-for CONDITION` executes an action and then blocks until the requested stable follow-up state is reached
 - `./sts rewards claim-all-safe` automatically claims deterministic non-card rewards and stops before card choice
+
+Transition handling:
+- `./sts context` is the first place to check whether a screen is actionable
+- if `isTransitioning=true`, treat the current frame as non-actionable and wait
+- `/api/v1/actions` is intentionally empty during known transient states so agents do not fire against half-settled UI
 
 Current low-token combat flow:
 - `context` -> current scene classification
@@ -165,6 +191,12 @@ Current low-token combat flow:
 - `combat/enemies` -> target and threat details only when needed
 - `knowledge/current` -> current card / relic / potion / status text cache only when ids need expansion
 - `delta observation` -> use after actions to avoid re-reading unchanged sections
+
+Recommended execution flow:
+- `context` -> confirm `isStable=true`
+- `actions` -> pick one legal action
+- `exec ... --wait-for ...` -> execute and wait for the next stable state when a transition is expected
+- `delta observation` or `room summary` -> inspect the new stable state
 
 The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
 
@@ -212,6 +244,8 @@ Validated in live play:
 - reward claiming
 - card reward selection
 - map node selection
+- stable `wait` handling across combat turns and room transitions
+- `exec --wait-for` returning a settled follow-up state after transient frames
 
 Canonical execution contract:
 
