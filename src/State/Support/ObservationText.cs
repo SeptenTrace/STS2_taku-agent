@@ -39,6 +39,11 @@ internal static class ObservationText
             return null;
         }
 
+        if (value is string text)
+        {
+            return StripRichTextTags(text);
+        }
+
         if (value is LocString locString)
         {
             try

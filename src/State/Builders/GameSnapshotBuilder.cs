@@ -345,6 +345,7 @@ internal sealed class GameSnapshotBuilder
         PlayerCombatState? playerCombatState = player?.PlayerCombatState;
         if (playerCombatState is null)
         {
+            EnemyStateEntrySnapshot[] enemies = BuildEnemies(combatState).ToArray();
             return new CombatStateSnapshot(
                 RoomType: combatRoom.RoomType.ToString().ToLowerInvariant(),
                 Round: combatState.RoundNumber,
@@ -352,9 +353,11 @@ internal sealed class GameSnapshotBuilder
                 Piles: new PileCountsSnapshot(0, 0, 0),
                 PileDetails: new PileDetailsSnapshot(Array.Empty<PileCardEntrySnapshot>(), Array.Empty<PileCardEntrySnapshot>(), Array.Empty<PileCardEntrySnapshot>()),
                 Hand: Array.Empty<HandCardEntrySnapshot>(),
-                Enemies: BuildEnemies(combatState));
+                Enemies: enemies,
+                AvailableActions: [new CombatActionSnapshot("end_turn", null, null, null, false, Array.Empty<string>())]);
         }
 
+        EnemyStateEntrySnapshot[] builtEnemies = BuildEnemies(combatState).ToArray();
         return new CombatStateSnapshot(
             RoomType: combatRoom.RoomType.ToString().ToLowerInvariant(),
             Round: combatState.RoundNumber,
@@ -367,17 +370,19 @@ internal sealed class GameSnapshotBuilder
                 DrawPile: BuildPileCards(playerCombatState.DrawPile.Cards, PileType.Draw),
                 DiscardPile: BuildPileCards(playerCombatState.DiscardPile.Cards, PileType.Discard),
                 ExhaustPile: BuildPileCards(playerCombatState.ExhaustPile.Cards, PileType.Exhaust)),
-            Hand: BuildHand(playerCombatState.Hand.Cards),
-            Enemies: BuildEnemies(combatState));
+            Hand: BuildHand(playerCombatState.Hand.Cards, builtEnemies.Select(enemy => enemy.EntityId).ToArray()),
+            Enemies: builtEnemies,
+            AvailableActions: BuildAvailableActions(playerCombatState.Hand.Cards, builtEnemies.Select(enemy => enemy.EntityId).ToArray()));
     }
 
-    private static IReadOnlyList<HandCardEntrySnapshot> BuildHand(IReadOnlyList<CardModel> cards)
+    private static IReadOnlyList<HandCardEntrySnapshot> BuildHand(IReadOnlyList<CardModel> cards, string[] enemyIds)
     {
         var hand = new List<HandCardEntrySnapshot>();
         for (int index = 0; index < cards.Count; index++)
         {
             CardModel card = cards[index];
             card.CanPlay(out var unplayableReason, out _);
+            string[] legalTargets = BuildLegalTargets(card, enemyIds);
 
             hand.Add(new HandCardEntrySnapshot(
                 Index: index,
@@ -390,7 +395,8 @@ internal sealed class GameSnapshotBuilder
                 Cost: GetCostDisplay(card),
                 StarCost: GetStarCostDisplay(card),
                 CanPlay: unplayableReason == UnplayableReason.None,
-                IsUpgraded: card.IsUpgraded));
+                IsUpgraded: card.IsUpgraded,
+                LegalTargets: legalTargets));
         }
 
         return hand;
@@ -436,17 +442,20 @@ internal sealed class GameSnapshotBuilder
                 Block: creature.Block,
                 IsAlive: creature.IsAlive,
                 Status: BuildStatusEntries(creature),
-                Intents: BuildIntents(creature)));
+                Intents: BuildIntents(creature, out int? incomingDamage),
+                IncomingDamage: incomingDamage));
         }
 
         return enemies;
     }
 
-    private static IReadOnlyList<IntentEntrySnapshot> BuildIntents(Creature creature)
+    private static IReadOnlyList<IntentEntrySnapshot> BuildIntents(Creature creature, out int? incomingDamage)
     {
         var intents = new List<IntentEntrySnapshot>();
+        int damageTotal = 0;
         if (creature.Monster?.NextMove is not MegaCrit.Sts2.Core.MonsterMoves.MonsterMoveStateMachine.MoveState moveState)
         {
+            incomingDamage = null;
             return intents;
         }
 
@@ -467,13 +476,78 @@ internal sealed class GameSnapshotBuilder
             {
             }
 
+            string intentType = (string?)intent.GetType().GetProperty("IntentType")?.GetValue(intent)?.ToString() ?? intent.GetType().Name;
+            bool isAttack = string.Equals(intentType, "Attack", StringComparison.OrdinalIgnoreCase);
+            int? expectedValue = TryParseNumericLabel(label);
+            if (isAttack && expectedValue.HasValue)
+            {
+                damageTotal += expectedValue.Value;
+            }
+
             intents.Add(new IntentEntrySnapshot(
-                Type: (string?)intent.GetType().GetProperty("IntentType")?.GetValue(intent)?.ToString() ?? intent.GetType().Name,
+                Type: intentType,
                 Label: label,
-                Description: description));
+                Description: description,
+                IsAttack: isAttack,
+                ExpectedValue: expectedValue));
         }
 
+        incomingDamage = damageTotal > 0 ? damageTotal : null;
         return intents;
+    }
+
+    private static IReadOnlyList<CombatActionSnapshot> BuildAvailableActions(IReadOnlyList<CardModel> cards, string[] enemyIds)
+    {
+        var actions = new List<CombatActionSnapshot>();
+
+        for (int index = 0; index < cards.Count; index++)
+        {
+            CardModel card = cards[index];
+            card.CanPlay(out var unplayableReason, out _);
+            if (unplayableReason != UnplayableReason.None)
+            {
+                continue;
+            }
+
+            string[] targetOptions = BuildLegalTargets(card, enemyIds);
+            actions.Add(new CombatActionSnapshot(
+                ActionType: "play_card",
+                CardIndex: index,
+                CardId: card.Id.Entry,
+                CardTitle: ObservationText.SafeGetText(() => card.Title) ?? card.Id.Entry,
+                RequiresTarget: card.TargetType == TargetType.AnyEnemy,
+                TargetOptions: targetOptions));
+        }
+
+        actions.Add(new CombatActionSnapshot(
+            ActionType: "end_turn",
+            CardIndex: null,
+            CardId: null,
+            CardTitle: null,
+            RequiresTarget: false,
+            TargetOptions: Array.Empty<string>()));
+
+        return actions;
+    }
+
+    private static string[] BuildLegalTargets(CardModel card, IReadOnlyList<string> enemyIds)
+    {
+        return card.TargetType switch
+        {
+            TargetType.AnyEnemy => enemyIds.ToArray(),
+            TargetType.Self or TargetType.AnyAlly or TargetType.AnyPlayer => ["self"],
+            _ => Array.Empty<string>()
+        };
+    }
+
+    private static int? TryParseNumericLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            return null;
+        }
+
+        return int.TryParse(label, out int value) ? value : null;
     }
 
     private static MapStateSnapshot BuildMapState(RunState runState)
@@ -864,6 +938,7 @@ internal sealed class GameSnapshotBuilder
             [
                 "/api/v1/context",
                 "/api/v1/combat/summary",
+                "/api/v1/combat/actions",
                 "/api/v1/combat/hand",
                 "/api/v1/combat/enemies",
                 "/api/v1/player/status"
@@ -906,6 +981,7 @@ internal sealed class GameSnapshotBuilder
                 {
                     facts.Add($"Round {combat.Round}, side {combat.Side}, hand {combat.Hand.Count}, draw {combat.Piles.Draw}, discard {combat.Piles.Discard}.");
                     facts.Add($"Alive enemies {combat.Enemies.Count}.");
+                    facts.Add($"Playable actions {combat.AvailableActions.Count(action => action.ActionType == "play_card")}, incoming damage {combat.Enemies.Sum(enemy => enemy.IncomingDamage ?? 0)}.");
                 }
                 break;
             case "map":

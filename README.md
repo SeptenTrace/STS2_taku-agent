@@ -46,6 +46,14 @@ Observation server:
 - `http://localhost:15527/api/v1/capabilities`
 - `http://localhost:15527/api/v1/context`
 - `http://localhost:15527/api/v1/observation/compact`
+- `http://localhost:15527/api/v1/combat/actions`
+
+Current low-token combat flow:
+- `context` -> current scene classification
+- `compact observation` -> minimal decision facts
+- `combat/summary` -> round, pile counts, incoming damage
+- `combat/actions` -> legal actions and legal target sets
+- `combat/hand` -> card text only when deeper reasoning is needed
 
 The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
 

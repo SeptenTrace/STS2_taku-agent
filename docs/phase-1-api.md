@@ -46,6 +46,7 @@
 例如战斗中不要默认读完整状态，而是按需查：
 
 - `/api/v1/combat/summary`
+- `/api/v1/combat/actions`
 - `/api/v1/combat/hand`
 - `/api/v1/combat/enemies`
 - `/api/v1/combat/piles`
@@ -153,9 +154,10 @@
 
 1. `/api/v1/context`
 2. `/api/v1/combat/summary`
-3. `/api/v1/combat/hand`
+3. `/api/v1/combat/actions`
 4. `/api/v1/combat/enemies`
-5. 如果必要，再查 `/api/v1/combat/piles` 或 `/api/v1/player/status`
+5. 如果需要卡牌文本或更多细节，再查 `/api/v1/combat/hand`
+6. 如果必要，再查 `/api/v1/combat/piles` 或 `/api/v1/player/status`
 
 ### 地图上
 

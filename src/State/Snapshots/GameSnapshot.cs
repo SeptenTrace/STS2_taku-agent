@@ -51,6 +51,23 @@ internal sealed record PlayerStateSnapshot(
     IReadOnlyList<PotionEntrySnapshot> Potions,
     DeckSummarySnapshot Deck);
 
+internal sealed record PlayerSummarySnapshot(
+    string? CharacterId,
+    string Character,
+    int CurrentHp,
+    int MaxHp,
+    int Block,
+    int Gold,
+    int? Energy,
+    int? MaxEnergy,
+    int? Stars,
+    int DeckCount,
+    int UniqueCards,
+    int UpgradedCards,
+    IReadOnlyList<string> RelicIds,
+    IReadOnlyList<string> PotionIds,
+    IReadOnlyList<StatusEntrySnapshot> Status);
+
 internal sealed record DeckSummarySnapshot(
     int TotalCards,
     IReadOnlyList<DeckCardEntrySnapshot> Cards);
@@ -95,7 +112,8 @@ internal sealed record CombatStateSnapshot(
     PileCountsSnapshot Piles,
     PileDetailsSnapshot PileDetails,
     IReadOnlyList<HandCardEntrySnapshot> Hand,
-    IReadOnlyList<EnemyStateEntrySnapshot> Enemies);
+    IReadOnlyList<EnemyStateEntrySnapshot> Enemies,
+    IReadOnlyList<CombatActionSnapshot> AvailableActions);
 
 internal sealed record PileCountsSnapshot(
     int Draw,
@@ -118,7 +136,8 @@ internal sealed record HandCardEntrySnapshot(
     string Cost,
     string? StarCost,
     bool CanPlay,
-    bool IsUpgraded);
+    bool IsUpgraded,
+    IReadOnlyList<string> LegalTargets);
 
 internal sealed record PileCardEntrySnapshot(
     string Id,
@@ -138,12 +157,23 @@ internal sealed record EnemyStateEntrySnapshot(
     int Block,
     bool IsAlive,
     IReadOnlyList<StatusEntrySnapshot> Status,
-    IReadOnlyList<IntentEntrySnapshot> Intents);
+    IReadOnlyList<IntentEntrySnapshot> Intents,
+    int? IncomingDamage);
 
 internal sealed record IntentEntrySnapshot(
     string Type,
     string? Label,
-    string? Description);
+    string? Description,
+    bool IsAttack,
+    int? ExpectedValue);
+
+internal sealed record CombatActionSnapshot(
+    string ActionType,
+    int? CardIndex,
+    string? CardId,
+    string? CardTitle,
+    bool RequiresTarget,
+    IReadOnlyList<string> TargetOptions);
 
 internal sealed record MapStateSnapshot(
     MapCoordSnapshot? CurrentPosition,

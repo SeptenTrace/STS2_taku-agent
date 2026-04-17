@@ -153,7 +153,8 @@ internal static class ObservationServer
                     {
                         "/api/v1/context",
                         "/api/v1/observation/compact",
-                        "/api/v1/capabilities"
+                        "/api/v1/capabilities",
+                        "/api/v1/combat/actions"
                     }
                 });
                 return;
@@ -184,7 +185,7 @@ internal static class ObservationServer
                     RequireSection(response, snapshot.Run, "No run is active.");
                     return;
                 case "/api/v1/player/summary":
-                    RequireSection(response, snapshot.Player, "Player state is unavailable.");
+                    RequireSection(response, BuildPlayerSummary(snapshot.Player), "Player state is unavailable.");
                     return;
                 case "/api/v1/player/deck":
                     RequireSection(response, snapshot.Player?.Deck, "Deck summary is unavailable.");
@@ -212,8 +213,13 @@ internal static class ObservationServer
                         snapshot.Combat.Side,
                         HandCount = snapshot.Combat.Hand.Count,
                         EnemyCount = snapshot.Combat.Enemies.Count,
+                        IncomingDamage = snapshot.Combat.Enemies.Sum(enemy => enemy.IncomingDamage ?? 0),
+                        PlayableCards = snapshot.Combat.Hand.Count(card => card.CanPlay),
                         snapshot.Combat.Piles
                     });
+                    return;
+                case "/api/v1/combat/actions":
+                    RequireSection(response, snapshot.Combat?.AvailableActions, "Combat actions are unavailable.");
                     return;
                 case "/api/v1/combat/hand":
                     RequireSection(response, snapshot.Combat?.Hand, "Combat hand is unavailable.");
@@ -277,6 +283,31 @@ internal static class ObservationServer
         }
 
         SendJson(response, data);
+    }
+
+    private static PlayerSummarySnapshot? BuildPlayerSummary(PlayerStateSnapshot? player)
+    {
+        if (player is null)
+        {
+            return null;
+        }
+
+        return new PlayerSummarySnapshot(
+            CharacterId: player.CharacterId,
+            Character: player.Character,
+            CurrentHp: player.CurrentHp,
+            MaxHp: player.MaxHp,
+            Block: player.Block,
+            Gold: player.Gold,
+            Energy: player.Energy,
+            MaxEnergy: player.MaxEnergy,
+            Stars: player.Stars,
+            DeckCount: player.DeckCount,
+            UniqueCards: player.Deck.Cards.Count,
+            UpgradedCards: player.Deck.Cards.Sum(card => card.UpgradedCopies),
+            RelicIds: player.Relics.Select(relic => relic.Id).ToArray(),
+            PotionIds: player.Potions.Select(potion => potion.Id).ToArray(),
+            Status: player.Status);
     }
 
     private static void SendJson(HttpListenerResponse response, object data)
