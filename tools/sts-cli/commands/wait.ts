@@ -2,6 +2,7 @@ import { POLL_INTERVAL_MS } from "../config.ts";
 import { CliError, HttpError } from "../core/errors.ts";
 import type { RequestClient } from "../core/client.ts";
 import type { CombatSummaryResponse, ContextResponse } from "../api-types.ts";
+import { waitForPlayerReady } from "./combo.ts";
 
 export interface WaitResult {
   condition: string;
@@ -43,6 +44,16 @@ export async function waitForCondition(client: RequestClient, rawCondition: stri
   const deadline = Date.now() + timeoutSeconds * 1000;
 
   while (Date.now() < deadline) {
+    if (condition === "player_ready") {
+      try {
+        return await waitForPlayerReady(client);
+      } catch (error) {
+        if (!(error instanceof CliError) || !error.message.startsWith("State is not player-ready")) {
+          throw error;
+        }
+      }
+    }
+
     const context = await client.request<ContextResponse>("/api/v1/context");
 
     const combat = condition === "player_turn" || condition === "enemy_turn"

@@ -15,6 +15,7 @@ import type { RequestClient } from "../core/client.ts";
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
 import { CliError } from "../core/errors.ts";
 import { StreamOutput, type Output } from "../core/output.ts";
+import { buildRoomSummary, claimAllSafeRewards } from "./combo.ts";
 import { buildExecPayload } from "./exec.ts";
 import { waitForCondition } from "./wait.ts";
 import { usage } from "../usage.ts";
@@ -132,6 +133,11 @@ export async function dispatch(
       await printRequest(client, output, "/api/v1/rest-site");
       return;
     case "rewards":
+      if (args[0] === "claim-all-safe") {
+        output.printJson(await claimAllSafeRewards(client));
+        return;
+      }
+
       await printRequest<RewardsResponse>(client, output, "/api/v1/rewards");
       return;
     case "card-reward":
@@ -157,6 +163,15 @@ export async function dispatch(
       }
 
       output.printJson(await waitForCondition(client, condition, timeout));
+      return;
+    }
+    case "room": {
+      const subcommand = args[0] ?? "summary";
+      if (subcommand !== "summary") {
+        throw new CliError(`Unknown room subcommand: ${subcommand}`);
+      }
+
+      output.printJson(await buildRoomSummary(client));
       return;
     }
     case "exec":

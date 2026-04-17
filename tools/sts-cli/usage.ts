@@ -16,10 +16,13 @@ export const usage = `Usage:
   ./sts shop
   ./sts rest-site
   ./sts rewards
+  ./sts rewards claim-all-safe
   ./sts card-reward
   ./sts card-selection
   ./sts treasure
   ./sts wait CONDITION [TIMEOUT_SECONDS]
+  ./sts wait player-ready [TIMEOUT_SECONDS]
+  ./sts room summary
   ./sts exec ACTION [INDEX] [TARGET]
   ./sts exec ACTION [key=value ...]
   ./sts full
@@ -34,9 +37,12 @@ Examples:
   ./sts actions
   ./sts combat actions
   ./sts player summary
+  ./sts room summary
   ./sts knowledge cards
   ./sts wait player_turn
+  ./sts wait player-ready
   ./sts wait rewards 10
+  ./sts rewards claim-all-safe
   ./sts exec play_card 0 jaw_worm_0
   ./sts exec select_card 1
   ./sts exec end_turn

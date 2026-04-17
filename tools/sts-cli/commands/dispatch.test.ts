@@ -113,6 +113,42 @@ test("dispatch map uses the typed map endpoint", async () => {
   assert.equal((output.jsonValues[0] as { visitedCount: number }).visitedCount, 3);
 });
 
+test("dispatch room summary writes combined room data", async () => {
+  const client = new MockClient({
+    "/api/v1/context": {
+      stateType: "rewards",
+      roomType: "Monster"
+    },
+    "/api/v1/player/summary": {
+      characterId: "IRONCLAD",
+      character: "铁甲战士",
+      currentHp: 85,
+      maxHp: 87,
+      block: 0,
+      gold: 104,
+      deckCount: 13,
+      uniqueCards: 6,
+      upgradedCards: 0,
+      relicIds: ["BURNING_BLOOD"],
+      potionIds: [],
+      status: []
+    },
+    "/api/v1/actions": {
+      stateType: "rewards",
+      actions: []
+    },
+    "/api/v1/rewards": {
+      canProceed: true,
+      items: []
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "room", ["summary"], output);
+
+  assert.equal((output.jsonValues[0] as { context: { stateType: string } }).context.stateType, "rewards");
+});
+
 test("dispatch rejects unknown subcommands with CliError", async () => {
   const client = new MockClient({});
   const output = new MockOutput();

@@ -66,6 +66,18 @@ export interface ActionSurfaceResponse {
   actions: ActionEntry[];
 }
 
+export interface ActionExecutionResponse {
+  status: string;
+  actionType: string;
+  message: string;
+  context?: ContextResponse;
+  delta?: unknown;
+  recovery?: unknown;
+  actions?: ActionSurfaceResponse | null;
+  debugSnapshotPath?: string | null;
+  suggestedNext?: string[];
+}
+
 export interface ObservationCompactResponse {
   stateType: string;
   goal?: string;
@@ -168,4 +180,36 @@ export interface ShopItemResponse {
 export interface ShopResponse {
   canProceed: boolean;
   items: ShopItemResponse[];
+}
+
+export interface RestSiteOptionResponse {
+  index: number;
+  title: string;
+  description?: string;
+  isEnabled?: boolean;
+}
+
+export interface RestSiteResponse {
+  options: RestSiteOptionResponse[];
+}
+
+export interface TreasureChoiceResponse {
+  index: number;
+  title: string;
+  description?: string;
+  rarity?: string;
+}
+
+export interface TreasureResponse {
+  canProceed: boolean;
+  relicChoices: TreasureChoiceResponse[];
+}
+
+export interface CardSelectionResponse {
+  screenType: string;
+  prompt?: string;
+  canConfirm: boolean;
+  canCancel: boolean;
+  canSkip: boolean;
+  cards: CardRewardCard[];
 }

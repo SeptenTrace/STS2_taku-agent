@@ -142,6 +142,11 @@ CLI implementation notes:
 - `tools/sts-cli/core/` contains shared runtime pieces such as HTTP, JSON handling, errors, and output
 - `tools/sts-cli/commands/` contains command-specific logic such as `exec` payload building and `wait`
 
+Higher-level CLI helpers:
+- `./sts room summary` returns one combined snapshot for the current actionable room
+- `./sts wait player-ready` waits for a stable player-actionable state or player combat turn
+- `./sts rewards claim-all-safe` automatically claims deterministic non-card rewards and stops before card choice
+
 Current low-token combat flow:
 - `context` -> current scene classification
 - `compact observation` -> minimal decision facts
