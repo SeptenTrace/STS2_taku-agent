@@ -23,47 +23,31 @@ internal static class ActionSurfaceBuilder
 
     private static ActionSurfaceSnapshot BuildCombatActions(GameSnapshot snapshot)
     {
+        string goal = snapshot.Combat?.Selection is null
+            ? "Use legal combat actions before expanding card text."
+            : "Resolve the active in-combat card selection before returning to normal play.";
         SceneActionSnapshot[] actions = snapshot.Combat?.AvailableActions.Select(BuildCombatAction).ToArray() ?? Array.Empty<SceneActionSnapshot>();
-        return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Use legal combat actions before expanding card text.", actions);
+        return new ActionSurfaceSnapshot(snapshot.Context.StateType, goal, actions);
     }
 
     private static SceneActionSnapshot BuildCombatAction(CombatActionSnapshot action)
     {
         var parameters = new List<ActionArgumentSnapshot>();
 
-        if (action.CardIndex.HasValue)
+        int? index = action.CardIndex ?? action.PotionSlot;
+        if (index.HasValue)
         {
-            parameters.Add(new ActionArgumentSnapshot("card_index", action.CardIndex.Value.ToString()));
+            parameters.Add(new ActionArgumentSnapshot("index", index.Value.ToString()));
         }
 
-        if (action.PotionSlot.HasValue)
+        if (action.RequiresTarget)
         {
-            parameters.Add(new ActionArgumentSnapshot("slot", action.PotionSlot.Value.ToString()));
-        }
-
-        if (!string.IsNullOrWhiteSpace(action.SourceId))
-        {
-            parameters.Add(new ActionArgumentSnapshot("source_id", action.SourceId));
-        }
-
-        if (action.EnergyCost.HasValue)
-        {
-            parameters.Add(new ActionArgumentSnapshot("energy_cost", action.EnergyCost.Value.ToString()));
-        }
-
-        if (action.StarCost.HasValue)
-        {
-            parameters.Add(new ActionArgumentSnapshot("star_cost", action.StarCost.Value.ToString()));
-        }
-
-        if (!string.IsNullOrWhiteSpace(action.TargetType))
-        {
-            parameters.Add(new ActionArgumentSnapshot("target_type", action.TargetType));
+            parameters.Add(new ActionArgumentSnapshot("target", "required"));
         }
 
         return new SceneActionSnapshot(
             ActionType: action.ActionType,
-            Index: action.CardIndex ?? action.PotionSlot,
+            Index: index,
             Label: action.SourceTitle ?? action.ActionType,
             Description: action.Semantic?.Summary ?? action.SourceDescription,
             IsAvailable: true,
@@ -81,13 +65,7 @@ internal static class ActionSurfaceBuilder
                 Label: $"Node {option.Index}: {option.Type}",
                 Description: $"Move to ({option.Col}, {option.Row}) and open {option.LeadsTo.Count} follow-up branches.",
                 IsAvailable: true,
-                Parameters:
-                [
-                    new ActionArgumentSnapshot("node_index", option.Index.ToString()),
-                    new ActionArgumentSnapshot("col", option.Col.ToString()),
-                    new ActionArgumentSnapshot("row", option.Row.ToString()),
-                    new ActionArgumentSnapshot("node_type", option.Type)
-                ],
+                Parameters: [new ActionArgumentSnapshot("index", option.Index.ToString())],
                 TargetOptions: Array.Empty<string>(),
                 Tags: [option.Type.ToLowerInvariant()]))
             .ToArray() ?? Array.Empty<SceneActionSnapshot>();
@@ -108,7 +86,7 @@ internal static class ActionSurfaceBuilder
                     Label: option.Title,
                     Description: option.Description,
                     IsAvailable: !option.IsLocked,
-                    Parameters: [new ActionArgumentSnapshot("option_index", option.Index.ToString())],
+                    Parameters: [new ActionArgumentSnapshot("index", option.Index.ToString())],
                     TargetOptions: Array.Empty<string>(),
                     Tags: BuildTags(option.IsProceed ? "proceed" : "event_option", option.IsLocked ? "locked" : "enabled")));
             }
@@ -144,12 +122,7 @@ internal static class ActionSurfaceBuilder
                     Label: item.Title,
                     Description: $"{item.Category} for {item.Price} gold. {item.Description}".Trim(),
                     IsAvailable: item.CanAfford,
-                    Parameters:
-                    [
-                        new ActionArgumentSnapshot("item_index", item.Index.ToString()),
-                        new ActionArgumentSnapshot("price", item.Price.ToString()),
-                        new ActionArgumentSnapshot("category", item.Category)
-                    ],
+                    Parameters: [new ActionArgumentSnapshot("index", item.Index.ToString())],
                     TargetOptions: Array.Empty<string>(),
                     Tags: BuildTags(item.Category, item.CanAfford ? "affordable" : "too_expensive")));
             }
@@ -185,11 +158,7 @@ internal static class ActionSurfaceBuilder
                     Label: option.Title,
                     Description: option.Description,
                     IsAvailable: option.IsEnabled,
-                    Parameters:
-                    [
-                        new ActionArgumentSnapshot("option_index", option.Index.ToString()),
-                        new ActionArgumentSnapshot("option_id", option.Id)
-                    ],
+                    Parameters: [new ActionArgumentSnapshot("index", option.Index.ToString())],
                     TargetOptions: Array.Empty<string>(),
                     Tags: BuildTags("rest_site", option.IsEnabled ? "enabled" : "disabled")));
             }
@@ -225,11 +194,7 @@ internal static class ActionSurfaceBuilder
                     Label: item.Label,
                     Description: item.Description,
                     IsAvailable: true,
-                    Parameters:
-                    [
-                        new ActionArgumentSnapshot("reward_index", item.Index.ToString()),
-                        new ActionArgumentSnapshot("reward_type", item.Type)
-                    ],
+                    Parameters: [new ActionArgumentSnapshot("index", item.Index.ToString())],
                     TargetOptions: Array.Empty<string>(),
                     Tags: [item.Type]));
             }
@@ -265,11 +230,7 @@ internal static class ActionSurfaceBuilder
                     Label: card.Title,
                     Description: card.Description,
                     IsAvailable: true,
-                    Parameters:
-                    [
-                        new ActionArgumentSnapshot("card_index", card.Index.ToString()),
-                        new ActionArgumentSnapshot("card_id", card.Id)
-                    ],
+                    Parameters: [new ActionArgumentSnapshot("index", card.Index.ToString())],
                     TargetOptions: Array.Empty<string>(),
                     Tags: BuildTags("card_reward", card.Rarity.ToLowerInvariant(), card.Type.ToLowerInvariant())));
             }
@@ -305,11 +266,7 @@ internal static class ActionSurfaceBuilder
                     Label: card.Title,
                     Description: card.Description,
                     IsAvailable: true,
-                    Parameters:
-                    [
-                        new ActionArgumentSnapshot("card_index", card.Index.ToString()),
-                        new ActionArgumentSnapshot("card_id", card.Id)
-                    ],
+                    Parameters: [new ActionArgumentSnapshot("index", card.Index.ToString())],
                     TargetOptions: Array.Empty<string>(),
                     Tags: BuildTags("card_selection", card.Rarity.ToLowerInvariant(), card.Type.ToLowerInvariant())));
             }
@@ -358,11 +315,7 @@ internal static class ActionSurfaceBuilder
                     Label: relic.Title,
                     Description: relic.Description,
                     IsAvailable: true,
-                    Parameters:
-                    [
-                        new ActionArgumentSnapshot("relic_index", relic.Index.ToString()),
-                        new ActionArgumentSnapshot("relic_id", relic.Id)
-                    ],
+                    Parameters: [new ActionArgumentSnapshot("index", relic.Index.ToString())],
                     TargetOptions: Array.Empty<string>(),
                     Tags: BuildTags("relic", relic.Rarity.ToLowerInvariant())));
             }

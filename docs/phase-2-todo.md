@@ -91,6 +91,14 @@
 - 参数命名完全复用 `actions`
 - 不引入第二套动作命名
 
+当前仓库已落地的起步实现:
+
+- server 写接口: `POST /api/v1/actions/execute`
+- CLI 执行入口: `./sts exec ACTION [INDEX] [TARGET]`
+- 执行响应会直接返回一条关联的 `delta observation`
+- 当前 canonical 参数收敛为 `action + index? + target?`
+- 旧字段名仍兼容，但不再是推荐写法
+
 ### 4.2 做合法性检查
 
 每个动作执行前要检查:
@@ -135,6 +143,19 @@
 4. 再补地图 / 奖励 / 事件 / 商店 / 篝火 / 宝箱
 5. 最后补卡牌选择、多步交互、恢复逻辑
 
+当前已完成到:
+
+- 动作执行总入口
+- 战斗 `play_card / use_potion / discard_potion / end_turn`
+- 地图 / 奖励 / 事件 / 商店 / 篝火 / 宝箱 / 基础卡牌选择
+- 战斗内 hand selection 的 `select_card / confirm_selection`
+- 执行日志落盘并关联 `delta observation`
+- 失败响应内建恢复建议和调试快照
+
+当前仍待补强:
+
+- 游戏内完整 smoke test 和边界动作回归
+
 ## 6. 验收标准
 
 满足下面条件，可以认为阶段二进入可用状态:
@@ -144,6 +165,20 @@
 - 局外至少能完成地图选择、奖励选择和事件选择
 - 每个动作执行后都能读到合理的 `delta observation`
 - 常见非法动作不会导致状态机失控
+
+## 6.1 当前结论
+
+阶段二当前结论：`已完成`
+
+依据：
+
+- 已在真实游戏中完成完整战斗执行
+- 已在真实游戏中完成奖励领取、卡牌选择和地图前进
+- `CLI -> server -> execute -> delta` 闭环已实战验证
+- 当前 canonical 参数已收敛为 `action + index? + target?`
+- 执行失败时可返回恢复建议、当前动作面和调试快照路径
+
+本阶段后续不再继续堆功能，后续工作转入阶段三规划层。
 
 ## 7. 非目标
 

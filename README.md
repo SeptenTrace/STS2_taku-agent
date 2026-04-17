@@ -7,6 +7,7 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `docs/phase-1-observer.md`: detailed plan for building the game-state observation layer
 - `docs/phase-1-api.md`: low-token API design for phase 1 observation
 - `docs/phase-2-todo.md`: action-layer TODO list for phase 2
+- `docs/phase-3-todo.md`: planning-layer TODO list for phase 3
 - `docs/feasibility/README.md`: feasibility assessment for the three planned phases
 
 ## Repository Layout
@@ -17,9 +18,9 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `build_release.sh`: build a shareable release package
 
 ## Current Status
-Phase 1 is now complete as a read-only observation layer.
+Phase 1 is complete as a read-only observation layer, and Phase 2 is now implemented and validated in live gameplay on top of the same low-token contract.
 
-The repository includes a working runtime capture pipeline, a low-token localhost observation server, a repo-local CLI, semantic action surfaces, incremental delta reads, and a current-context knowledge cache.
+The repository includes a working runtime capture pipeline, a low-token localhost observation server, a repo-local CLI, semantic action surfaces, incremental delta reads, a current-context knowledge cache, and a Phase 2 execution endpoint that returns linked observation deltas plus recovery guidance.
 
 ## Current Design
 
@@ -77,12 +78,14 @@ Currently completed:
 - `compact observation` endpoint for minimal decision context
 - `delta observation` endpoint for incremental post-action reads
 - generic `actions` endpoint for the current screen
+- `actions/execute` write endpoint that reuses the same action names and parameter contract
 - `knowledge/current` endpoint that separates current-context card / relic / potion / status knowledge from dynamic state
 - Fine-grained read-only endpoints for combat, player, map, rewards, event, shop, rest-site, treasure, and card selection
 - `combat/actions` endpoint exposing legal card actions, potion actions, legal target sets, and semantic summaries
 - Lightweight `player/summary` endpoint without full deck payload
 - Structured combat summary with `incomingDamage`, `playableCards`, potion action count, and total action count
 - Repo-local `./sts` CLI wrapper over the observation server
+- Phase 2 execution endpoint for combat, map, rewards, shop, rest-site, treasure, and card selection actions
 
 Currently verified fields:
 - Player role / character type
@@ -112,6 +115,7 @@ Observation server:
 - `http://localhost:15527/api/v1/observation/compact`
 - `http://localhost:15527/api/v1/observation/delta`
 - `http://localhost:15527/api/v1/actions`
+- `http://localhost:15527/api/v1/actions/execute`
 - `http://localhost:15527/api/v1/knowledge/current`
 - `http://localhost:15527/api/v1/combat/actions`
 
@@ -120,6 +124,9 @@ Local CLI:
 - `./sts next`
 - `./sts delta`
 - `./sts actions`
+- `./sts exec play_card 0 jaw_worm_0`
+- `./sts exec select_card 1`
+- `./sts exec end_turn`
 - `./sts combat actions`
 - `./sts player summary`
 - `./sts knowledge current`
@@ -145,7 +152,44 @@ With Phase 1 closed, the next work moves to Phase 2 action execution:
 - multi-step interaction handling for targeted cards, card selection, relic selection, and proceed flows
 - action result logging linked to observation deltas
 
+Current implemented Phase 2 surface:
+
+- `play_card`
+- `use_potion`
+- `discard_potion`
+- `end_turn`
+- `choose_map_node`
+- `choose_event_option`
+- `advance_dialogue`
+- `choose_rest_option`
+- `shop_purchase`
+- `claim_reward`
+- `select_card_reward`
+- `skip_card_reward`
+- `proceed`
+- `select_card`
+- `confirm_selection`
+- `cancel_selection`
+- `skip_selection`
+- `claim_treasure_relic`
+
+Validated in live play:
+
+- full combat turn execution across multiple turns
+- reward claiming
+- card reward selection
+- map node selection
+
+Canonical execution contract:
+
+- request shape: `action` + optional `index` + optional `target`
+- combat target selection uses `target`
+- every indexed action now accepts the same canonical `index`
+- legacy aliases like `card_index`, `slot`, `reward_index`, and `relic_index` are still accepted for compatibility
+
 See `docs/phase-2-todo.md` for the concrete task list.
+
+The next planning-layer work is tracked in `docs/phase-3-todo.md`.
 
 ## Build For Local macOS Game
 ```bash

@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Godot;
 using TakuAgentMod.Diagnostics;
+using TakuAgentMod.Execution;
 using TakuAgentMod.State.Builders;
 using TakuAgentMod.State.Snapshots;
 
@@ -17,6 +18,8 @@ internal static class ObservationServer
 
     private static readonly ConcurrentQueue<Action> MainThreadQueue = new();
     private static readonly GameSnapshotBuilder SnapshotBuilder = new();
+    private static readonly ActionExecutionLogExporter ActionExecutionLogExporter = new();
+    private static readonly GameSnapshotDebugExporter GameSnapshotDebugExporter = new();
     private static readonly object SnapshotStateLock = new();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -129,7 +132,7 @@ internal static class ObservationServer
             HttpListenerRequest request = context.Request;
             HttpListenerResponse response = context.Response;
             response.Headers.Add("Access-Control-Allow-Origin", "*");
-            response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
+            response.Headers.Add("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
             response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
 
             if (request.HttpMethod == "OPTIONS")
@@ -139,13 +142,25 @@ internal static class ObservationServer
                 return;
             }
 
-            if (request.HttpMethod != "GET")
+            string path = request.Url?.AbsolutePath ?? "/";
+            if (request.HttpMethod == "POST")
             {
-                SendError(response, 405, "Only GET is supported.");
+                if (path == "/api/v1/actions/execute")
+                {
+                    HandleExecuteActionRequest(request, response);
+                    return;
+                }
+
+                SendError(response, 405, "Only /api/v1/actions/execute supports POST.");
                 return;
             }
 
-            string path = request.Url?.AbsolutePath ?? "/";
+            if (request.HttpMethod != "GET")
+            {
+                SendError(response, 405, "Only GET is supported for read endpoints.");
+                return;
+            }
+
             if (path == "/")
             {
                 SendJson(response, new
@@ -158,6 +173,7 @@ internal static class ObservationServer
                         "/api/v1/context",
                         "/api/v1/observation/compact",
                         "/api/v1/observation/delta",
+                        "/api/v1/actions/execute",
                         "/api/v1/capabilities",
                         "/api/v1/actions",
                         "/api/v1/knowledge/current",
@@ -319,9 +335,207 @@ internal static class ObservationServer
         SendJson(response, data);
     }
 
+    private static void HandleExecuteActionRequest(HttpListenerRequest request, HttpListenerResponse response)
+    {
+        if (!TryParseActionRequest(request, out string? actionType, out Dictionary<string, JsonElement> parameters, out string error))
+        {
+            SendError(response, 400, error);
+            return;
+        }
+
+        GameSnapshot beforeSnapshot = RunOnMainThread(() => SnapshotBuilder.Build()).GetAwaiter().GetResult();
+        string beforeSignature = BuildSnapshotSignature(beforeSnapshot);
+
+        ActionExecutionOutcome outcome = RunOnMainThread(() => ActionExecutor.Execute(actionType!, parameters)).GetAwaiter().GetResult();
+        (GameSnapshot afterSnapshot, bool changed) = WaitForPostActionSnapshot(actionType!, beforeSignature, beforeSnapshot, outcome.Success);
+        (_, int version, bool distinctChanged) = UpdateObservationState(afterSnapshot);
+
+        bool deltaChanged = changed || distinctChanged;
+        ObservationDeltaSnapshot delta = ObservationDeltaBuilder.Build(beforeSnapshot, afterSnapshot, version, deltaChanged);
+        ActionSurfaceSnapshot currentActions = ActionSurfaceBuilder.Build(afterSnapshot);
+        ActionRecoveryDescriptor recovery = BuildRecoveryDescriptor(outcome, afterSnapshot, currentActions);
+        string? debugSnapshotPath = outcome.Success ? null : GameSnapshotDebugExporter.Write($"action_failure_{actionType}", afterSnapshot);
+
+        ActionExecutionLogExporter.Append(new ActionExecutionLogEntry(
+            Timestamp: DateTimeOffset.Now,
+            ActionType: actionType!,
+            Parameters: SerializeParameters(parameters),
+            Success: outcome.Success,
+            Message: outcome.Message,
+            ReasonCode: recovery.ReasonCode,
+            Retryable: recovery.Retryable,
+            StateTypeBefore: beforeSnapshot.Context.StateType,
+            StateTypeAfter: afterSnapshot.Context.StateType,
+            ObservationVersion: version,
+            ObservationChanged: delta.Changed,
+            ChangedSections: delta.ChangedSections,
+            Facts: delta.Facts,
+            DebugSnapshotPath: debugSnapshotPath));
+
+        response.StatusCode = outcome.Success ? 200 : 409;
+        SendJson(response, new
+        {
+            status = outcome.Success ? "ok" : "error",
+            actionType,
+            message = outcome.Message,
+            context = afterSnapshot.Context,
+            delta,
+            recovery,
+            actions = outcome.Success ? null : currentActions,
+            debugSnapshotPath,
+            suggestedNext = outcome.Success ? ["/api/v1/observation/delta"] : recovery.NextQueries
+        });
+    }
+
+    private static bool TryParseActionRequest(
+        HttpListenerRequest request,
+        out string? actionType,
+        out Dictionary<string, JsonElement> parameters,
+        out string error)
+    {
+        actionType = null;
+        parameters = new Dictionary<string, JsonElement>(StringComparer.OrdinalIgnoreCase);
+        error = string.Empty;
+
+        try
+        {
+            using var stream = request.InputStream;
+            using JsonDocument document = JsonDocument.Parse(stream);
+            JsonElement root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object)
+            {
+                error = "Request body must be a JSON object.";
+                return false;
+            }
+
+            foreach (JsonProperty property in root.EnumerateObject())
+            {
+                if (property.NameEquals("actionType") || property.NameEquals("action_type") || property.NameEquals("action"))
+                {
+                    actionType = property.Value.GetString();
+                    continue;
+                }
+
+                if (property.NameEquals("parameters"))
+                {
+                    if (property.Value.ValueKind != JsonValueKind.Object)
+                    {
+                        error = "'parameters' must be a JSON object.";
+                        return false;
+                    }
+
+                    foreach (JsonProperty nested in property.Value.EnumerateObject())
+                    {
+                        parameters[nested.Name] = nested.Value.Clone();
+                    }
+
+                    continue;
+                }
+
+                parameters[property.Name] = property.Value.Clone();
+            }
+        }
+        catch (Exception ex)
+        {
+            error = $"Invalid JSON body: {ex.Message}";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(actionType))
+        {
+            error = "Missing 'actionType'.";
+            return false;
+        }
+
+        return true;
+    }
+
+    private static (GameSnapshot Snapshot, bool Changed) WaitForPostActionSnapshot(string actionType, string beforeSignature, GameSnapshot beforeSnapshot, bool shouldWaitForChange)
+    {
+        if (!shouldWaitForChange)
+        {
+            return (RunOnMainThread(() => SnapshotBuilder.Build()).GetAwaiter().GetResult(), false);
+        }
+
+        GameSnapshot latestSnapshot = beforeSnapshot;
+        for (int attempt = 0; attempt < 8; attempt++)
+        {
+            Thread.Sleep(75);
+            latestSnapshot = RunOnMainThread(() => SnapshotBuilder.Build()).GetAwaiter().GetResult();
+            string latestSignature = BuildSnapshotSignature(latestSnapshot);
+            if (!string.Equals(beforeSignature, latestSignature, StringComparison.Ordinal))
+            {
+                return WaitForStablePostActionState(actionType, beforeSnapshot, latestSnapshot);
+            }
+        }
+
+        latestSnapshot = RunOnMainThread(() => SnapshotBuilder.Build()).GetAwaiter().GetResult();
+        bool changed = !string.Equals(beforeSignature, BuildSnapshotSignature(latestSnapshot), StringComparison.Ordinal);
+        return (latestSnapshot, changed);
+    }
+
+    private static (GameSnapshot Snapshot, bool Changed) WaitForStablePostActionState(string actionType, GameSnapshot beforeSnapshot, GameSnapshot changedSnapshot)
+    {
+        GameSnapshot latestSnapshot = changedSnapshot;
+        if (!ShouldKeepWaitingForStableState(actionType, beforeSnapshot, latestSnapshot))
+        {
+            return (latestSnapshot, true);
+        }
+
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            Thread.Sleep(100);
+            latestSnapshot = RunOnMainThread(() => SnapshotBuilder.Build()).GetAwaiter().GetResult();
+            if (!ShouldKeepWaitingForStableState(actionType, beforeSnapshot, latestSnapshot))
+            {
+                break;
+            }
+        }
+
+        return (latestSnapshot, true);
+    }
+
+    private static bool ShouldKeepWaitingForStableState(string actionType, GameSnapshot beforeSnapshot, GameSnapshot currentSnapshot)
+    {
+        bool startedInCombat = beforeSnapshot.Context.StateType is "monster" or "elite" or "boss";
+        bool stillInCombat = currentSnapshot.Context.StateType is "monster" or "elite" or "boss";
+
+        if (startedInCombat &&
+            actionType is "play_card" or "use_potion" or "discard_potion" &&
+            stillInCombat &&
+            currentSnapshot.Combat is not null &&
+            currentSnapshot.Combat.Enemies.Count == 0)
+        {
+            return true;
+        }
+
+        if (actionType == "end_turn" &&
+            startedInCombat &&
+            stillInCombat &&
+            currentSnapshot.Combat is not null &&
+            currentSnapshot.Combat.Side.Equals("enemy", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (actionType == "select_card_reward" &&
+            string.Equals(currentSnapshot.Context.StateType, "card_reward", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (actionType == "proceed" &&
+            string.Equals(beforeSnapshot.Context.StateType, currentSnapshot.Context.StateType, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
     private static (GameSnapshot? PreviousSnapshot, int Version, bool Changed) UpdateObservationState(GameSnapshot snapshot)
     {
-        string signature = JsonSerializer.Serialize(snapshot, JsonOptions);
+        string signature = BuildSnapshotSignature(snapshot);
 
         lock (SnapshotStateLock)
         {
@@ -371,6 +585,85 @@ internal static class ObservationServer
             Status: player.Status);
     }
 
+    private static string BuildSnapshotSignature(GameSnapshot snapshot)
+    {
+        return JsonSerializer.Serialize(snapshot, JsonOptions);
+    }
+
+    private static Dictionary<string, string?> SerializeParameters(IReadOnlyDictionary<string, JsonElement> parameters)
+    {
+        return parameters.ToDictionary(
+            pair => pair.Key,
+            pair => pair.Value.ValueKind == JsonValueKind.String ? pair.Value.GetString() : pair.Value.ToString(),
+            StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static ActionRecoveryDescriptor BuildRecoveryDescriptor(ActionExecutionOutcome outcome, GameSnapshot snapshot, ActionSurfaceSnapshot currentActions)
+    {
+        if (outcome.Success)
+        {
+            return new ActionRecoveryDescriptor(
+                ReasonCode: "ok",
+                Retryable: false,
+                NextStep: "read_delta",
+                NextQueries: ["/api/v1/observation/delta"]);
+        }
+
+        string reasonCode = ClassifyFailureReason(outcome.Message);
+        bool retryable = reasonCode is "state_changed" or "transition" or "actions_disabled";
+        string nextStep = retryable
+            ? "re-read context and actions before retrying"
+            : "do not retry blindly; inspect current actions first";
+
+        var nextQueries = new List<string> { "/api/v1/context", "/api/v1/actions" };
+        if (snapshot.Context.StateType is "monster" or "elite" or "boss")
+        {
+            nextQueries.Add("/api/v1/combat/summary");
+        }
+
+        return new ActionRecoveryDescriptor(
+            ReasonCode: reasonCode,
+            Retryable: retryable,
+            NextStep: nextStep,
+            NextQueries: nextQueries);
+    }
+
+    private static string ClassifyFailureReason(string message)
+    {
+        string text = message.ToLowerInvariant();
+        if (text.Contains("out of range") || text.Contains("missing 'index'") || text.Contains("unknown action"))
+        {
+            return "invalid_input";
+        }
+
+        if (text.Contains("target"))
+        {
+            return "invalid_target";
+        }
+
+        if (text.Contains("not open") || text.Contains("not active") || text.Contains("not in player play phase") || text.Contains("cannot end turn while"))
+        {
+            return "state_changed";
+        }
+
+        if (text.Contains("actions are currently disabled"))
+        {
+            return "actions_disabled";
+        }
+
+        if (text.Contains("inventory is not ready") || text.Contains("dialogue") || text.Contains("not visible"))
+        {
+            return "transition";
+        }
+
+        if (text.Contains("cannot be") || text.Contains("locked") || text.Contains("not enough gold") || text.Contains("empty"))
+        {
+            return "illegal_action";
+        }
+
+        return "execution_error";
+    }
+
     private static void SendJson(HttpListenerResponse response, object data)
     {
         string json = JsonSerializer.Serialize(data, JsonOptions);
@@ -387,3 +680,9 @@ internal static class ObservationServer
         SendJson(response, new { error = message });
     }
 }
+
+internal sealed record ActionRecoveryDescriptor(
+    string ReasonCode,
+    bool Retryable,
+    string NextStep,
+    IReadOnlyList<string> NextQueries);

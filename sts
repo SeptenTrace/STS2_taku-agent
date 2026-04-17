@@ -28,6 +28,8 @@ Usage:
   ./sts card-reward
   ./sts card-selection
   ./sts treasure
+  ./sts exec ACTION [INDEX] [TARGET]
+  ./sts exec ACTION [key=value ...]
   ./sts full
   ./sts get /api/v1/...
 
@@ -41,6 +43,9 @@ Examples:
   ./sts combat actions
   ./sts player summary
   ./sts knowledge cards
+  ./sts exec play_card 0 jaw_worm_0
+  ./sts exec select_card 1
+  ./sts exec end_turn
   ./sts get /api/v1/state/full
 EOF
 }
@@ -56,6 +61,12 @@ pretty_print() {
 request() {
   local path="$1"
   "${CURL_BIN}" -fsS "${BASE_URL}${path}"
+}
+
+request_post() {
+  local path="$1"
+  local body="$2"
+  "${CURL_BIN}" -fsS -X POST -H 'Content-Type: application/json' -d "${body}" "${BASE_URL}${path}"
 }
 
 request_and_print() {
@@ -166,6 +177,82 @@ command_get() {
   request_and_print "${path}"
 }
 
+json_escape() {
+  local value="$1"
+  value="${value//\\/\\\\}"
+  value="${value//\"/\\\"}"
+  value="${value//$'\n'/\\n}"
+  printf '%s' "${value}"
+}
+
+json_value() {
+  local value="$1"
+  if [[ "${value}" =~ ^-?[0-9]+$ ]]; then
+    printf '%s' "${value}"
+  elif [[ "${value}" == "true" || "${value}" == "false" || "${value}" == "null" ]]; then
+    printf '%s' "${value}"
+  else
+    printf '"%s"' "$(json_escape "${value}")"
+  fi
+}
+
+build_exec_body() {
+  local action="$1"
+  shift || true
+
+  local body
+  body='{"actionType":"'"$(json_escape "${action}")"'","parameters":{'
+  local first=1
+  local pair key value
+
+  if [[ $# -gt 0 && "$1" != *=* ]]; then
+    if [[ $# -gt 2 ]]; then
+      printf 'Positional exec form supports at most ACTION [INDEX] [TARGET]\n' >&2
+      exit 1
+    fi
+
+    body+='"index":'"$(json_value "$1")"
+    if [[ $# -eq 2 ]]; then
+      body+=',"target":'"$(json_value "$2")"
+    fi
+    body+='}}'
+    printf '%s' "${body}"
+    return
+  fi
+
+  for pair in "$@"; do
+    if [[ "${pair}" != *=* ]]; then
+      printf 'Execution arguments must use key=value format: %s\n' "${pair}" >&2
+      exit 1
+    fi
+
+    key="${pair%%=*}"
+    value="${pair#*=}"
+
+    if [[ ${first} -eq 0 ]]; then
+      body+=','
+    fi
+
+    body+='"'"$(json_escape "${key}")"'":'"$(json_value "${value}")"
+    first=0
+  done
+
+  body+='}}'
+  printf '%s' "${body}"
+}
+
+command_exec() {
+  local action="${1:-}"
+  shift || true
+
+  if [[ -z "${action}" ]]; then
+    printf 'Usage: ./sts exec ACTION [key=value ...]\n' >&2
+    exit 1
+  fi
+
+  request_post "/api/v1/actions/execute" "$(build_exec_body "${action}" "$@")" | pretty_print
+}
+
 main() {
   local command="${1:-help}"
   shift || true
@@ -191,6 +278,7 @@ main() {
     card-reward) request_and_print "/api/v1/card-reward" ;;
     card-selection|card-select) request_and_print "/api/v1/card-selection" ;;
     treasure) request_and_print "/api/v1/treasure" ;;
+    exec|do|act) command_exec "$@" ;;
     full) request_and_print "/api/v1/state/full" ;;
     get) command_get "$@" ;;
     *)

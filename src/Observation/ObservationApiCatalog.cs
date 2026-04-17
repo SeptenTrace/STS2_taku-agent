@@ -14,6 +14,7 @@ internal static class ObservationApiCatalog
         new("/api/v1/context", "low", "Current state type and recommended follow-up queries.", "Always call first.", ["*"]),
         new("/api/v1/observation/compact", "low", "Compact LLM-oriented observation for the active screen.", "Use when you want the minimum decision context.", ["*"]),
         new("/api/v1/observation/delta", "low", "Incremental changes since the previous distinct observation.", "Use after actions or screen transitions to avoid rereading full sections.", ["*"]),
+        new("/api/v1/actions/execute", "write", "Execute one action using the existing low-token action contract and return a linked delta.", "Use after /api/v1/actions once you have chosen a legal action.", ["*"]),
         new("/api/v1/run", "low", "Run progress summary: act, floor, ascension, current room.", "Use for coarse long-horizon planning.", ["*"]),
         new("/api/v1/actions", "low", "Current-screen action surface with action names, parameters, and lightweight semantics.", "Use before deeper reads on any actionable screen.", ["*"]),
         new("/api/v1/player/summary", "low", "Lightweight player summary with HP, gold, energy, status, and build counts.", "Use first when evaluating any choice that depends on build state.", ["*"]),

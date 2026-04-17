@@ -8,6 +8,7 @@ using MegaCrit.Sts2.Core.Entities.Players;
 using MegaCrit.Sts2.Core.Entities.Potions;
 using MegaCrit.Sts2.Core.Models;
 using MegaCrit.Sts2.Core.Map;
+using MegaCrit.Sts2.Core.Nodes.Combat;
 using MegaCrit.Sts2.Core.Nodes.Cards.Holders;
 using MegaCrit.Sts2.Core.Nodes.CommonUi;
 using MegaCrit.Sts2.Core.Nodes.Events;
@@ -354,6 +355,7 @@ internal sealed class GameSnapshotBuilder
                 PileDetails: new PileDetailsSnapshot(Array.Empty<PileCardEntrySnapshot>(), Array.Empty<PileCardEntrySnapshot>(), Array.Empty<PileCardEntrySnapshot>()),
                 Hand: Array.Empty<HandCardEntrySnapshot>(),
                 Enemies: enemies,
+                Selection: null,
                 AvailableActions:
                 [
                     new CombatActionSnapshot(
@@ -376,6 +378,7 @@ internal sealed class GameSnapshotBuilder
 
         EnemyStateEntrySnapshot[] builtEnemies = BuildEnemies(combatState).ToArray();
         Player livePlayer = player ?? throw new InvalidOperationException("Combat player is unavailable.");
+        CombatSelectionSnapshot? selection = BuildCombatSelectionState();
         return new CombatStateSnapshot(
             RoomType: combatRoom.RoomType.ToString().ToLowerInvariant(),
             Round: combatState.RoundNumber,
@@ -390,7 +393,47 @@ internal sealed class GameSnapshotBuilder
                 ExhaustPile: BuildPileCards(playerCombatState.ExhaustPile.Cards, PileType.Exhaust)),
             Hand: BuildHand(playerCombatState.Hand.Cards, builtEnemies.Select(enemy => enemy.EntityId).ToArray()),
             Enemies: builtEnemies,
-            AvailableActions: BuildAvailableActions(livePlayer, playerCombatState.Hand.Cards, builtEnemies.Select(enemy => enemy.EntityId).ToArray()));
+            Selection: selection,
+            AvailableActions: BuildAvailableActions(livePlayer, playerCombatState.Hand.Cards, builtEnemies.Select(enemy => enemy.EntityId).ToArray(), selection));
+    }
+
+    private static CombatSelectionSnapshot? BuildCombatSelectionState()
+    {
+        NPlayerHand? hand = NPlayerHand.Instance;
+        if (hand is null || !hand.IsInCardSelection)
+        {
+            return null;
+        }
+
+        string mode = hand.CurrentMode switch
+        {
+            NPlayerHand.Mode.SimpleSelect => "simple_select",
+            NPlayerHand.Mode.UpgradeSelect => "upgrade_select",
+            _ => hand.CurrentMode.ToString().ToLowerInvariant()
+        };
+
+        var selectedCards = new List<string>();
+        Control? selectedContainer = hand.GetNodeOrNull<Control>("%SelectedHandCardContainer");
+        if (selectedContainer is not null)
+        {
+            foreach (NSelectedHandCardHolder holder in GodotNodeSearch.FindAll<NSelectedHandCardHolder>(selectedContainer))
+            {
+                CardModel? card = holder.CardModel;
+                if (card is null)
+                {
+                    continue;
+                }
+
+                selectedCards.Add(ObservationText.SafeGetText(() => card.Title) ?? card.Id.Entry);
+            }
+        }
+
+        bool canConfirm = hand.GetNodeOrNull<NConfirmButton>("%SelectModeConfirmButton")?.IsEnabled ?? false;
+        return new CombatSelectionSnapshot(
+            Mode: mode,
+            Prompt: ReadControlText(hand.GetNodeOrNull<Control>("%SelectionHeader")),
+            CanConfirm: canConfirm,
+            SelectedCards: selectedCards);
     }
 
     private static IReadOnlyList<HandCardEntrySnapshot> BuildHand(IReadOnlyList<CardModel> cards, string[] enemyIds)
@@ -514,8 +557,13 @@ internal sealed class GameSnapshotBuilder
         return intents;
     }
 
-    private static IReadOnlyList<CombatActionSnapshot> BuildAvailableActions(Player player, IReadOnlyList<CardModel> cards, string[] enemyIds)
+    private static IReadOnlyList<CombatActionSnapshot> BuildAvailableActions(Player player, IReadOnlyList<CardModel> cards, string[] enemyIds, CombatSelectionSnapshot? selection)
     {
+        if (selection is not null && NPlayerHand.Instance is { } hand && hand.IsInCardSelection)
+        {
+            return BuildHandSelectionActions(hand);
+        }
+
         var actions = new List<CombatActionSnapshot>();
 
         for (int index = 0; index < cards.Count; index++)
@@ -621,6 +669,59 @@ internal sealed class GameSnapshotBuilder
             IsXCost: false,
             Tags: ["turn"],
             Semantic: null));
+
+        return actions;
+    }
+
+    private static IReadOnlyList<CombatActionSnapshot> BuildHandSelectionActions(NPlayerHand hand)
+    {
+        var actions = new List<CombatActionSnapshot>();
+
+        for (int index = 0; index < hand.ActiveHolders.Count; index++)
+        {
+            NCardHolder holder = hand.ActiveHolders[index];
+            CardModel? card = holder.CardModel;
+            if (card is null)
+            {
+                continue;
+            }
+
+            actions.Add(new CombatActionSnapshot(
+                ActionType: "select_card",
+                CardIndex: index,
+                PotionSlot: null,
+                SourceId: card.Id.Entry,
+                SourceTitle: ObservationText.SafeGetText(() => card.Title) ?? card.Id.Entry,
+                SourceDescription: ObservationText.SafeGetCardDescription(card, PileType.Hand) ?? string.Empty,
+                TargetType: null,
+                RequiresTarget: false,
+                TargetOptions: Array.Empty<string>(),
+                EnergyCost: null,
+                StarCost: null,
+                IsXCost: false,
+                Tags: ["combat_selection"],
+                Semantic: null));
+        }
+
+        bool canConfirm = hand.GetNodeOrNull<NConfirmButton>("%SelectModeConfirmButton")?.IsEnabled ?? false;
+        if (canConfirm)
+        {
+            actions.Add(new CombatActionSnapshot(
+                ActionType: "confirm_selection",
+                CardIndex: null,
+                PotionSlot: null,
+                SourceId: null,
+                SourceTitle: "Confirm selection",
+                SourceDescription: "Confirm the currently selected hand cards.",
+                TargetType: null,
+                RequiresTarget: false,
+                TargetOptions: Array.Empty<string>(),
+                EnergyCost: null,
+                StarCost: null,
+                IsXCost: false,
+                Tags: ["combat_selection", "confirm"],
+                Semantic: null));
+        }
 
         return actions;
     }
@@ -1086,7 +1187,14 @@ internal sealed class GameSnapshotBuilder
                 {
                     facts.Add($"Round {combat.Round}, side {combat.Side}, hand {combat.Hand.Count}, draw {combat.Piles.Draw}, discard {combat.Piles.Discard}.");
                     facts.Add($"Alive enemies {combat.Enemies.Count}.");
-                    facts.Add($"Playable actions {combat.AvailableActions.Count(action => action.ActionType == "play_card")}, potion actions {combat.AvailableActions.Count(action => action.ActionType is "use_potion" or "discard_potion")}, incoming damage {combat.Enemies.Sum(enemy => enemy.IncomingDamage ?? 0)}.");
+                    if (combat.Selection is not null)
+                    {
+                        facts.Add($"Combat card selection active: mode {combat.Selection.Mode}, selected {combat.Selection.SelectedCards.Count}, can confirm {combat.Selection.CanConfirm}.");
+                    }
+                    else
+                    {
+                        facts.Add($"Playable actions {combat.AvailableActions.Count(action => action.ActionType == "play_card")}, potion actions {combat.AvailableActions.Count(action => action.ActionType is "use_potion" or "discard_potion")}, incoming damage {combat.Enemies.Sum(enemy => enemy.IncomingDamage ?? 0)}.");
+                    }
                 }
                 break;
             case "map":

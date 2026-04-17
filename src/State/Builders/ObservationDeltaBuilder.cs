@@ -85,10 +85,38 @@ internal static class ObservationDeltaBuilder
             facts.Add($"Player block changed {previous.Block} -> {current.Block}.");
         }
 
+        if (previous.Gold != current.Gold)
+        {
+            changedSections.Add("player");
+            facts.Add($"Player gold changed {previous.Gold} -> {current.Gold}.");
+        }
+
         if (previous.Energy != current.Energy || previous.Stars != current.Stars)
         {
             changedSections.Add("player");
             facts.Add($"Player resources changed to energy {current.Energy ?? 0}/{current.MaxEnergy ?? 0}, stars {current.Stars ?? 0}.");
+        }
+
+        if (previous.DeckCount != current.DeckCount)
+        {
+            changedSections.Add("player_deck");
+            facts.Add($"Player deck count changed {previous.DeckCount} -> {current.DeckCount}.");
+        }
+
+        string previousRelics = string.Join("|", previous.RelicIdsOrEmpty());
+        string currentRelics = string.Join("|", current.RelicIdsOrEmpty());
+        if (!string.Equals(previousRelics, currentRelics, StringComparison.Ordinal))
+        {
+            changedSections.Add("player_relics");
+            facts.Add("Player relic list changed.");
+        }
+
+        string previousPotions = string.Join("|", previous.PotionIdsOrEmpty());
+        string currentPotions = string.Join("|", current.PotionIdsOrEmpty());
+        if (!string.Equals(previousPotions, currentPotions, StringComparison.Ordinal))
+        {
+            changedSections.Add("player_potions");
+            facts.Add("Player potion slots changed.");
         }
 
         string previousStatus = BuildStatusSignature(previous.Status);
@@ -133,6 +161,16 @@ internal static class ObservationDeltaBuilder
         {
             changedSections.Add("combat_enemies");
             facts.Add("Enemy HP, intents, or statuses changed.");
+        }
+
+        string previousSelection = BuildCombatSelectionSignature(previous.Selection);
+        string currentSelection = BuildCombatSelectionSignature(current.Selection);
+        if (!string.Equals(previousSelection, currentSelection, StringComparison.Ordinal))
+        {
+            changedSections.Add("combat_selection");
+            facts.Add(current.Selection is null
+                ? "Combat selection mode ended."
+                : $"Combat selection mode changed to '{current.Selection.Mode}'.");
         }
 
         string previousActions = BuildActionSignature(previous.AvailableActions);
@@ -284,5 +322,25 @@ internal static class ObservationDeltaBuilder
     private static string BuildActionSignature(IReadOnlyList<CombatActionSnapshot> actions)
     {
         return string.Join("|", actions.Select(action => $"{action.ActionType}:{action.CardIndex}:{action.PotionSlot}:{action.SourceId}:{string.Join(",", action.TargetOptions)}"));
+    }
+
+    private static string BuildCombatSelectionSignature(CombatSelectionSnapshot? selection)
+    {
+        if (selection is null)
+        {
+            return "none";
+        }
+
+        return $"{selection.Mode}:{selection.CanConfirm}:{selection.Prompt}:{string.Join(",", selection.SelectedCards)}";
+    }
+
+    private static IReadOnlyList<string> RelicIdsOrEmpty(this PlayerStateSnapshot player)
+    {
+        return player.Relics.Select(relic => relic.Id).ToArray();
+    }
+
+    private static IReadOnlyList<string> PotionIdsOrEmpty(this PlayerStateSnapshot player)
+    {
+        return player.Potions.Select(potion => potion.Id).ToArray();
     }
 }

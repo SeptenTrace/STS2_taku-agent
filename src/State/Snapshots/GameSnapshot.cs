@@ -113,7 +113,14 @@ internal sealed record CombatStateSnapshot(
     PileDetailsSnapshot PileDetails,
     IReadOnlyList<HandCardEntrySnapshot> Hand,
     IReadOnlyList<EnemyStateEntrySnapshot> Enemies,
+    CombatSelectionSnapshot? Selection,
     IReadOnlyList<CombatActionSnapshot> AvailableActions);
+
+internal sealed record CombatSelectionSnapshot(
+    string Mode,
+    string? Prompt,
+    bool CanConfirm,
+    IReadOnlyList<string> SelectedCards);
 
 internal sealed record PileCountsSnapshot(
     int Draw,
