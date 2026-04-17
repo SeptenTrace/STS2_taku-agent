@@ -18,13 +18,16 @@
 - `GameSnapshot` 统一状态容器
 - `context` 场景识别接口
 - `compact observation` 紧凑观察接口
+- `delta observation` 增量观察接口
+- 通用 `actions` 动作面接口
+- 当前上下文 `knowledge/current` 知识缓存
 - 细粒度只读 HTTP API
 - 本地 `./sts` CLI
-- 战斗动作查询 `combat/actions`
+- 语义化战斗动作查询 `combat/actions`
 - 轻量玩家摘要 `player/summary`
 - 结构化战斗摘要 `combat/summary`
 
-这说明阶段一已经从“单纯读取战斗快照”走到了“可被 agent 直接调用的本地观察接口”。
+这说明阶段一已经从“单纯读取战斗快照”走到了“可被 agent 直接调用的整局低 token 观察接口”。
 
 ## 1.2 参考源与更远目标
 
@@ -85,10 +88,11 @@
 例如战斗中不要默认读完整状态，而是按需查：
 
 - `/api/v1/combat/summary`
-- `/api/v1/combat/actions`
+- `/api/v1/actions`
 - `/api/v1/combat/hand`
 - `/api/v1/combat/enemies`
 - `/api/v1/combat/piles`
+- `/api/v1/knowledge/current`
 
 同理，局外则按需查：
 
@@ -261,22 +265,13 @@
 
 ## 8. 接下来需要做什么
 
-当前阶段一下一步的重点不是再加更多全量字段，而是继续降低默认查询成本。
+阶段一到这里已经完成。
 
-最重要的后续事项:
+接下来进入阶段二，重点会从“看懂”切到“能动”，但阶段二要直接建立在当前观察契约上:
 
-- 为 `combat/actions` 增加语义字段
-  例如伤害、格挡、附加状态、资源消耗
-- 增加 `delta observation`
-  让动作后查询只返回变化部分
-- 给地图、奖励、商店、事件增加“动作层”接口
-- 把卡牌、遗物、药水等静态说明进一步抽离成静态词典
-- 明确阶段二调用时的推荐查询模板
+- `context` 仍然是统一入口
+- `actions` 提供当前屏幕的动作名和参数结构
+- `delta observation` 提供动作执行后的最小回读
+- `knowledge/current` 只在需要展开文本含义时调用
 
-目标是让后续 agent 在多数情况下只需要：
-
-1. 查上下文
-2. 查紧凑观察
-3. 查合法动作
-
-只有在少数必要场景下，才继续展开更细的信息。
+阶段二的具体拆分见 `docs/phase-2-todo.md`。

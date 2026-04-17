@@ -17,6 +17,7 @@ internal static class ObservationServer
 
     private static readonly ConcurrentQueue<Action> MainThreadQueue = new();
     private static readonly GameSnapshotBuilder SnapshotBuilder = new();
+    private static readonly object SnapshotStateLock = new();
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -28,6 +29,9 @@ internal static class ObservationServer
     private static HttpListener? _listener;
     private static Thread? _serverThread;
     private static bool _started;
+    private static GameSnapshot? _lastSnapshot;
+    private static string? _lastSnapshotSignature;
+    private static int _observationVersion;
 
     public static void Start()
     {
@@ -153,7 +157,10 @@ internal static class ObservationServer
                     {
                         "/api/v1/context",
                         "/api/v1/observation/compact",
+                        "/api/v1/observation/delta",
                         "/api/v1/capabilities",
+                        "/api/v1/actions",
+                        "/api/v1/knowledge/current",
                         "/api/v1/combat/actions"
                     }
                 });
@@ -172,6 +179,10 @@ internal static class ObservationServer
             }
 
             GameSnapshot snapshot = RunOnMainThread(() => SnapshotBuilder.Build()).GetAwaiter().GetResult();
+            ActionSurfaceSnapshot actionSurface = ActionSurfaceBuilder.Build(snapshot);
+            CurrentKnowledgeSnapshot knowledge = CurrentKnowledgeBuilder.Build(snapshot);
+            (GameSnapshot? previousSnapshot, int version, bool changed) = UpdateObservationState(snapshot);
+            ObservationDeltaSnapshot delta = ObservationDeltaBuilder.Build(previousSnapshot, snapshot, version, changed);
 
             switch (path)
             {
@@ -180,6 +191,12 @@ internal static class ObservationServer
                     return;
                 case "/api/v1/observation/compact":
                     SendJson(response, snapshot.CompactObservation);
+                    return;
+                case "/api/v1/observation/delta":
+                    SendJson(response, delta);
+                    return;
+                case "/api/v1/actions":
+                    SendJson(response, actionSurface);
                     return;
                 case "/api/v1/run":
                     RequireSection(response, snapshot.Run, "No run is active.");
@@ -199,6 +216,21 @@ internal static class ObservationServer
                 case "/api/v1/player/status":
                     RequireSection(response, snapshot.Player?.Status, "Player status data is unavailable.");
                     return;
+                case "/api/v1/knowledge/current":
+                    SendJson(response, knowledge);
+                    return;
+                case "/api/v1/knowledge/cards":
+                    SendJson(response, knowledge.Cards);
+                    return;
+                case "/api/v1/knowledge/relics":
+                    SendJson(response, knowledge.Relics);
+                    return;
+                case "/api/v1/knowledge/potions":
+                    SendJson(response, knowledge.Potions);
+                    return;
+                case "/api/v1/knowledge/status":
+                    SendJson(response, knowledge.Statuses);
+                    return;
                 case "/api/v1/combat/summary":
                     if (snapshot.Combat is null)
                     {
@@ -215,6 +247,8 @@ internal static class ObservationServer
                         EnemyCount = snapshot.Combat.Enemies.Count,
                         IncomingDamage = snapshot.Combat.Enemies.Sum(enemy => enemy.IncomingDamage ?? 0),
                         PlayableCards = snapshot.Combat.Hand.Count(card => card.CanPlay),
+                        PotionActions = snapshot.Combat.AvailableActions.Count(action => action.ActionType is "use_potion" or "discard_potion"),
+                        ActionCount = snapshot.Combat.AvailableActions.Count,
                         snapshot.Combat.Piles
                     });
                     return;
@@ -283,6 +317,33 @@ internal static class ObservationServer
         }
 
         SendJson(response, data);
+    }
+
+    private static (GameSnapshot? PreviousSnapshot, int Version, bool Changed) UpdateObservationState(GameSnapshot snapshot)
+    {
+        string signature = JsonSerializer.Serialize(snapshot, JsonOptions);
+
+        lock (SnapshotStateLock)
+        {
+            if (_observationVersion == 0)
+            {
+                _observationVersion = 1;
+                _lastSnapshot = snapshot;
+                _lastSnapshotSignature = signature;
+                return (null, _observationVersion, true);
+            }
+
+            bool changed = !string.Equals(_lastSnapshotSignature, signature, StringComparison.Ordinal);
+            GameSnapshot? previousSnapshot = _lastSnapshot;
+            if (changed)
+            {
+                _observationVersion++;
+                _lastSnapshot = snapshot;
+                _lastSnapshotSignature = signature;
+            }
+
+            return (previousSnapshot, _observationVersion, changed);
+        }
     }
 
     private static PlayerSummarySnapshot? BuildPlayerSummary(PlayerStateSnapshot? player)

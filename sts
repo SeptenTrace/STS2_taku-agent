@@ -14,7 +14,10 @@ Usage:
   ./sts context
   ./sts next
   ./sts compact
+  ./sts delta
+  ./sts actions
   ./sts run
+  ./sts knowledge [current|cards|relics|potions|status]
   ./sts player [summary|deck|relics|potions|status]
   ./sts combat [summary|actions|hand|enemies|piles]
   ./sts map
@@ -34,8 +37,10 @@ Environment:
 Examples:
   ./sts ping
   ./sts next
+  ./sts actions
   ./sts combat actions
   ./sts player summary
+  ./sts knowledge cards
   ./sts get /api/v1/state/full
 EOF
 }
@@ -94,8 +99,31 @@ command_compact() {
   request_and_print "/api/v1/observation/compact"
 }
 
+command_delta() {
+  request_and_print "/api/v1/observation/delta"
+}
+
+command_actions() {
+  request_and_print "/api/v1/actions"
+}
+
 command_run() {
   request_and_print "/api/v1/run"
+}
+
+command_knowledge() {
+  local section="${1:-current}"
+  case "${section}" in
+    current) request_and_print "/api/v1/knowledge/current" ;;
+    cards) request_and_print "/api/v1/knowledge/cards" ;;
+    relics) request_and_print "/api/v1/knowledge/relics" ;;
+    potions) request_and_print "/api/v1/knowledge/potions" ;;
+    status) request_and_print "/api/v1/knowledge/status" ;;
+    *)
+      printf 'Unknown knowledge subcommand: %s\n' "${section}" >&2
+      exit 1
+      ;;
+  esac
 }
 
 command_player() {
@@ -149,7 +177,10 @@ main() {
     context) command_context ;;
     next) command_next ;;
     compact|observe|observation) command_compact ;;
+    delta) command_delta ;;
+    actions) command_actions ;;
     run) command_run ;;
+    knowledge) command_knowledge "$@" ;;
     player) command_player "$@" ;;
     combat) command_combat "$@" ;;
     map) request_and_print "/api/v1/map/summary" ;;

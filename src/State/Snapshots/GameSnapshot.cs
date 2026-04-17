@@ -170,10 +170,38 @@ internal sealed record IntentEntrySnapshot(
 internal sealed record CombatActionSnapshot(
     string ActionType,
     int? CardIndex,
-    string? CardId,
-    string? CardTitle,
+    int? PotionSlot,
+    string? SourceId,
+    string? SourceTitle,
+    string? SourceDescription,
+    string? TargetType,
     bool RequiresTarget,
-    IReadOnlyList<string> TargetOptions);
+    IReadOnlyList<string> TargetOptions,
+    int? EnergyCost,
+    int? StarCost,
+    bool IsXCost,
+    IReadOnlyList<string> Tags,
+    CombatActionSemanticSnapshot? Semantic);
+
+internal sealed record CombatActionSemanticSnapshot(
+    string Summary,
+    string TargetType,
+    int? EnergyCost,
+    int? StarCost,
+    bool IsXCost,
+    int Damage,
+    int Block,
+    int Draw,
+    int EnergyGain,
+    int Heal,
+    IReadOnlyList<SemanticEffectSnapshot> Effects,
+    IReadOnlyList<string> Tags);
+
+internal sealed record SemanticEffectSnapshot(
+    string Kind,
+    int? Amount,
+    string Target,
+    string? Detail);
 
 internal sealed record MapStateSnapshot(
     MapCoordSnapshot? CurrentPosition,
@@ -278,3 +306,66 @@ internal sealed record CompactObservationSnapshot(
     string Goal,
     IReadOnlyList<string> Facts,
     IReadOnlyList<string> SuggestedQueries);
+
+internal sealed record ActionSurfaceSnapshot(
+    string StateType,
+    string Goal,
+    IReadOnlyList<SceneActionSnapshot> Actions);
+
+internal sealed record SceneActionSnapshot(
+    string ActionType,
+    int? Index,
+    string Label,
+    string? Description,
+    bool IsAvailable,
+    IReadOnlyList<ActionArgumentSnapshot> Parameters,
+    IReadOnlyList<string> TargetOptions,
+    IReadOnlyList<string> Tags);
+
+internal sealed record ActionArgumentSnapshot(
+    string Name,
+    string Value);
+
+internal sealed record ObservationDeltaSnapshot(
+    int Version,
+    string StateType,
+    bool Changed,
+    IReadOnlyList<string> ChangedSections,
+    IReadOnlyList<string> Facts,
+    IReadOnlyList<string> SuggestedQueries);
+
+internal sealed record CurrentKnowledgeSnapshot(
+    IReadOnlyList<CardKnowledgeSnapshot> Cards,
+    IReadOnlyList<RelicKnowledgeSnapshot> Relics,
+    IReadOnlyList<PotionKnowledgeSnapshot> Potions,
+    IReadOnlyList<StatusKnowledgeSnapshot> Statuses);
+
+internal sealed record CardKnowledgeSnapshot(
+    string Id,
+    string Title,
+    string Type,
+    string Rarity,
+    string? TargetType,
+    string Cost,
+    string? StarCost,
+    string Description,
+    string SemanticSummary);
+
+internal sealed record RelicKnowledgeSnapshot(
+    string Id,
+    string Title,
+    string Description,
+    string? Rarity);
+
+internal sealed record PotionKnowledgeSnapshot(
+    string Id,
+    string Title,
+    string Description,
+    string TargetType,
+    string Usage);
+
+internal sealed record StatusKnowledgeSnapshot(
+    string Id,
+    string Title,
+    string Description,
+    string Category);

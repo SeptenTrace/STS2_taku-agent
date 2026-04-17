@@ -6,6 +6,7 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `docs/overall-plan.md`: project roadmap across the three major phases
 - `docs/phase-1-observer.md`: detailed plan for building the game-state observation layer
 - `docs/phase-1-api.md`: low-token API design for phase 1 observation
+- `docs/phase-2-todo.md`: action-layer TODO list for phase 2
 - `docs/feasibility/README.md`: feasibility assessment for the three planned phases
 
 ## Repository Layout
@@ -15,10 +16,10 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `build_and_deploy.sh`: build locally and copy outputs into the game `mods` folder
 - `build_release.sh`: build a shareable release package
 
-## Current Phase 1 Status
-The repository now includes a working battle-state capture pipeline for in-combat observation.
+## Current Status
+Phase 1 is now complete as a read-only observation layer.
 
-It also now exposes a local read-only observation server designed for low-token LLM access, plus a repo-local CLI for stable local querying.
+The repository includes a working runtime capture pipeline, a low-token localhost observation server, a repo-local CLI, semantic action surfaces, incremental delta reads, and a current-context knowledge cache.
 
 ## Current Design
 
@@ -74,10 +75,13 @@ Currently completed:
 - Local observation server on `localhost:15527`
 - Global `context` classification endpoint
 - `compact observation` endpoint for minimal decision context
+- `delta observation` endpoint for incremental post-action reads
+- generic `actions` endpoint for the current screen
+- `knowledge/current` endpoint that separates current-context card / relic / potion / status knowledge from dynamic state
 - Fine-grained read-only endpoints for combat, player, map, rewards, event, shop, rest-site, treasure, and card selection
-- `combat/actions` endpoint exposing legal actions and legal target sets
+- `combat/actions` endpoint exposing legal card actions, potion actions, legal target sets, and semantic summaries
 - Lightweight `player/summary` endpoint without full deck payload
-- Structured combat summary with `incomingDamage` and `playableCards`
+- Structured combat summary with `incomingDamage`, `playableCards`, potion action count, and total action count
 - Repo-local `./sts` CLI wrapper over the observation server
 
 Currently verified fields:
@@ -106,36 +110,42 @@ Observation server:
 - `http://localhost:15527/api/v1/capabilities`
 - `http://localhost:15527/api/v1/context`
 - `http://localhost:15527/api/v1/observation/compact`
+- `http://localhost:15527/api/v1/observation/delta`
+- `http://localhost:15527/api/v1/actions`
+- `http://localhost:15527/api/v1/knowledge/current`
 - `http://localhost:15527/api/v1/combat/actions`
 
 Local CLI:
 - `./sts ping`
 - `./sts next`
+- `./sts delta`
+- `./sts actions`
 - `./sts combat actions`
 - `./sts player summary`
+- `./sts knowledge current`
 - `./sts get /api/v1/state/full`
 
 Current low-token combat flow:
 - `context` -> current scene classification
 - `compact observation` -> minimal decision facts
 - `combat/summary` -> round, pile counts, incoming damage
-- `combat/actions` -> legal actions and legal target sets
-- `combat/hand` -> card text only when deeper reasoning is needed
+- `actions` -> current-screen legal actions with parameters and semantic hints
+- `combat/enemies` -> target and threat details only when needed
+- `knowledge/current` -> current card / relic / potion / status text cache only when ids need expansion
+- `delta observation` -> use after actions to avoid re-reading unchanged sections
 
 The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
 
-## Next Work
+## Phase 2 Start
 
-The next Phase 1 tasks are:
+With Phase 1 closed, the next work moves to Phase 2 action execution:
 
-- add richer semantic fields to `combat/actions`
-  for example estimated damage, block gain, status application, and resource spend
-- add `delta observation`
-  so post-action reads return only what changed instead of another full subtree
-- extend the same low-token action-layer design to map, reward, shop, and event screens
-- separate static knowledge from dynamic state more aggressively
-  for example card / relic / potion dictionaries instead of repeating long descriptions
-- define the smallest stable observation contract that Phase 2 action APIs can depend on
+- executable action APIs for combat, map, rewards, shop, rest-site, event, and selection screens
+- legality checks and recovery around screen transitions and target invalidation
+- multi-step interaction handling for targeted cards, card selection, relic selection, and proceed flows
+- action result logging linked to observation deltas
+
+See `docs/phase-2-todo.md` for the concrete task list.
 
 ## Build For Local macOS Game
 ```bash

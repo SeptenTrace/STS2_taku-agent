@@ -354,10 +354,28 @@ internal sealed class GameSnapshotBuilder
                 PileDetails: new PileDetailsSnapshot(Array.Empty<PileCardEntrySnapshot>(), Array.Empty<PileCardEntrySnapshot>(), Array.Empty<PileCardEntrySnapshot>()),
                 Hand: Array.Empty<HandCardEntrySnapshot>(),
                 Enemies: enemies,
-                AvailableActions: [new CombatActionSnapshot("end_turn", null, null, null, false, Array.Empty<string>())]);
+                AvailableActions:
+                [
+                    new CombatActionSnapshot(
+                        ActionType: "end_turn",
+                        CardIndex: null,
+                        PotionSlot: null,
+                        SourceId: null,
+                        SourceTitle: "End turn",
+                        SourceDescription: "End the current player turn.",
+                        TargetType: null,
+                        RequiresTarget: false,
+                        TargetOptions: Array.Empty<string>(),
+                        EnergyCost: null,
+                        StarCost: null,
+                        IsXCost: false,
+                        Tags: ["turn"],
+                        Semantic: null)
+                ]);
         }
 
         EnemyStateEntrySnapshot[] builtEnemies = BuildEnemies(combatState).ToArray();
+        Player livePlayer = player ?? throw new InvalidOperationException("Combat player is unavailable.");
         return new CombatStateSnapshot(
             RoomType: combatRoom.RoomType.ToString().ToLowerInvariant(),
             Round: combatState.RoundNumber,
@@ -372,7 +390,7 @@ internal sealed class GameSnapshotBuilder
                 ExhaustPile: BuildPileCards(playerCombatState.ExhaustPile.Cards, PileType.Exhaust)),
             Hand: BuildHand(playerCombatState.Hand.Cards, builtEnemies.Select(enemy => enemy.EntityId).ToArray()),
             Enemies: builtEnemies,
-            AvailableActions: BuildAvailableActions(playerCombatState.Hand.Cards, builtEnemies.Select(enemy => enemy.EntityId).ToArray()));
+            AvailableActions: BuildAvailableActions(livePlayer, playerCombatState.Hand.Cards, builtEnemies.Select(enemy => enemy.EntityId).ToArray()));
     }
 
     private static IReadOnlyList<HandCardEntrySnapshot> BuildHand(IReadOnlyList<CardModel> cards, string[] enemyIds)
@@ -496,7 +514,7 @@ internal sealed class GameSnapshotBuilder
         return intents;
     }
 
-    private static IReadOnlyList<CombatActionSnapshot> BuildAvailableActions(IReadOnlyList<CardModel> cards, string[] enemyIds)
+    private static IReadOnlyList<CombatActionSnapshot> BuildAvailableActions(Player player, IReadOnlyList<CardModel> cards, string[] enemyIds)
     {
         var actions = new List<CombatActionSnapshot>();
 
@@ -510,22 +528,99 @@ internal sealed class GameSnapshotBuilder
             }
 
             string[] targetOptions = BuildLegalTargets(card, enemyIds);
+            string description = ObservationText.SafeGetCardDescription(card, PileType.Hand) ?? string.Empty;
+            CombatActionSemanticSnapshot semantic = SemanticDescriptionParser.BuildActionSemantic(
+                card.TargetType.ToString(),
+                card.EnergyCost.CostsX ? null : card.EnergyCost.GetAmountToSpend(),
+                card.HasStarCostX ? null : (card.CurrentStarCost >= 0 ? card.GetStarCostWithModifiers() : null),
+                card.EnergyCost.CostsX || card.HasStarCostX,
+                description);
+
             actions.Add(new CombatActionSnapshot(
                 ActionType: "play_card",
                 CardIndex: index,
-                CardId: card.Id.Entry,
-                CardTitle: ObservationText.SafeGetText(() => card.Title) ?? card.Id.Entry,
+                PotionSlot: null,
+                SourceId: card.Id.Entry,
+                SourceTitle: ObservationText.SafeGetText(() => card.Title) ?? card.Id.Entry,
+                SourceDescription: description,
+                TargetType: card.TargetType.ToString(),
                 RequiresTarget: card.TargetType == TargetType.AnyEnemy,
-                TargetOptions: targetOptions));
+                TargetOptions: targetOptions,
+                EnergyCost: card.EnergyCost.CostsX ? null : card.EnergyCost.GetAmountToSpend(),
+                StarCost: card.HasStarCostX ? null : (card.CurrentStarCost >= 0 ? card.GetStarCostWithModifiers() : null),
+                IsXCost: card.EnergyCost.CostsX || card.HasStarCostX,
+                Tags: semantic.Tags,
+                Semantic: semantic));
+        }
+
+        for (int slot = 0; slot < player.PotionSlots.Count; slot++)
+        {
+            PotionModel? potion = player.PotionSlots[slot];
+            if (potion is null)
+            {
+                continue;
+            }
+
+            string description = ObservationText.SafeGetText(() => potion.DynamicDescription) ?? string.Empty;
+            string[] targetOptions = BuildPotionTargets(potion, enemyIds);
+            CombatActionSemanticSnapshot semantic = SemanticDescriptionParser.BuildActionSemantic(
+                potion.TargetType.ToString(),
+                null,
+                null,
+                false,
+                description);
+
+            if (!potion.IsQueued && potion.Usage != PotionUsage.Automatic && potion.PassesCustomUsabilityCheck)
+            {
+                actions.Add(new CombatActionSnapshot(
+                    ActionType: "use_potion",
+                    CardIndex: null,
+                    PotionSlot: slot,
+                    SourceId: potion.Id.Entry,
+                    SourceTitle: ObservationText.SafeGetText(() => potion.Title) ?? potion.Id.Entry,
+                    SourceDescription: description,
+                    TargetType: potion.TargetType.ToString(),
+                    RequiresTarget: potion.TargetType == TargetType.AnyEnemy,
+                    TargetOptions: targetOptions,
+                    EnergyCost: null,
+                    StarCost: null,
+                    IsXCost: false,
+                    Tags: semantic.Tags.Concat(["potion"]).Distinct(StringComparer.OrdinalIgnoreCase).ToArray(),
+                    Semantic: semantic));
+            }
+
+            actions.Add(new CombatActionSnapshot(
+                ActionType: "discard_potion",
+                CardIndex: null,
+                PotionSlot: slot,
+                SourceId: potion.Id.Entry,
+                SourceTitle: ObservationText.SafeGetText(() => potion.Title) ?? potion.Id.Entry,
+                SourceDescription: "Discard this potion.",
+                TargetType: null,
+                RequiresTarget: false,
+                TargetOptions: Array.Empty<string>(),
+                EnergyCost: null,
+                StarCost: null,
+                IsXCost: false,
+                Tags: ["potion", "discard"],
+                Semantic: null));
         }
 
         actions.Add(new CombatActionSnapshot(
             ActionType: "end_turn",
             CardIndex: null,
-            CardId: null,
-            CardTitle: null,
+            PotionSlot: null,
+            SourceId: null,
+            SourceTitle: "End turn",
+            SourceDescription: "End the current player turn.",
+            TargetType: null,
             RequiresTarget: false,
-            TargetOptions: Array.Empty<string>()));
+            TargetOptions: Array.Empty<string>(),
+            EnergyCost: null,
+            StarCost: null,
+            IsXCost: false,
+            Tags: ["turn"],
+            Semantic: null));
 
         return actions;
     }
@@ -533,6 +628,16 @@ internal sealed class GameSnapshotBuilder
     private static string[] BuildLegalTargets(CardModel card, IReadOnlyList<string> enemyIds)
     {
         return card.TargetType switch
+        {
+            TargetType.AnyEnemy => enemyIds.ToArray(),
+            TargetType.Self or TargetType.AnyAlly or TargetType.AnyPlayer => ["self"],
+            _ => Array.Empty<string>()
+        };
+    }
+
+    private static string[] BuildPotionTargets(PotionModel potion, IReadOnlyList<string> enemyIds)
+    {
+        return potion.TargetType switch
         {
             TargetType.AnyEnemy => enemyIds.ToArray(),
             TargetType.Self or TargetType.AnyAlly or TargetType.AnyPlayer => ["self"],
@@ -926,22 +1031,22 @@ internal sealed class GameSnapshotBuilder
         return stateType switch
         {
             "menu" => ["/api/v1/context"],
-            "map" => ["/api/v1/context", "/api/v1/map/summary", "/api/v1/player/summary"],
-            "event" => ["/api/v1/context", "/api/v1/event", "/api/v1/player/summary"],
-            "shop" => ["/api/v1/context", "/api/v1/shop", "/api/v1/player/summary"],
-            "rest_site" => ["/api/v1/context", "/api/v1/rest-site", "/api/v1/player/summary"],
-            "treasure" => ["/api/v1/context", "/api/v1/treasure", "/api/v1/player/summary"],
-            "rewards" => ["/api/v1/context", "/api/v1/rewards", "/api/v1/player/summary"],
-            "card_reward" => ["/api/v1/context", "/api/v1/card-reward", "/api/v1/player/deck"],
-            "card_select" => ["/api/v1/context", "/api/v1/card-selection", "/api/v1/player/deck"],
+            "map" => ["/api/v1/context", "/api/v1/map/summary", "/api/v1/actions", "/api/v1/player/summary"],
+            "event" => ["/api/v1/context", "/api/v1/event", "/api/v1/actions", "/api/v1/player/summary"],
+            "shop" => ["/api/v1/context", "/api/v1/shop", "/api/v1/actions", "/api/v1/player/summary"],
+            "rest_site" => ["/api/v1/context", "/api/v1/rest-site", "/api/v1/actions", "/api/v1/player/summary"],
+            "treasure" => ["/api/v1/context", "/api/v1/treasure", "/api/v1/actions", "/api/v1/player/summary"],
+            "rewards" => ["/api/v1/context", "/api/v1/rewards", "/api/v1/actions", "/api/v1/player/summary"],
+            "card_reward" => ["/api/v1/context", "/api/v1/card-reward", "/api/v1/actions", "/api/v1/player/deck", "/api/v1/knowledge/current"],
+            "card_select" => ["/api/v1/context", "/api/v1/card-selection", "/api/v1/actions", "/api/v1/player/deck", "/api/v1/knowledge/current"],
             "monster" or "elite" or "boss" =>
             [
                 "/api/v1/context",
                 "/api/v1/combat/summary",
-                "/api/v1/combat/actions",
-                "/api/v1/combat/hand",
+                "/api/v1/actions",
                 "/api/v1/combat/enemies",
-                "/api/v1/player/status"
+                "/api/v1/player/status",
+                "/api/v1/knowledge/current"
             ],
             _ => ["/api/v1/context", "/api/v1/observation/compact"]
         };
@@ -981,7 +1086,7 @@ internal sealed class GameSnapshotBuilder
                 {
                     facts.Add($"Round {combat.Round}, side {combat.Side}, hand {combat.Hand.Count}, draw {combat.Piles.Draw}, discard {combat.Piles.Discard}.");
                     facts.Add($"Alive enemies {combat.Enemies.Count}.");
-                    facts.Add($"Playable actions {combat.AvailableActions.Count(action => action.ActionType == "play_card")}, incoming damage {combat.Enemies.Sum(enemy => enemy.IncomingDamage ?? 0)}.");
+                    facts.Add($"Playable actions {combat.AvailableActions.Count(action => action.ActionType == "play_card")}, potion actions {combat.AvailableActions.Count(action => action.ActionType is "use_potion" or "discard_potion")}, incoming damage {combat.Enemies.Sum(enemy => enemy.IncomingDamage ?? 0)}.");
                 }
                 break;
             case "map":
