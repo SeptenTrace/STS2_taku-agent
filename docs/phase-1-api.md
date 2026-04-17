@@ -111,6 +111,34 @@
 
 ## 4. 当前 API 目录
 
+除了 HTTP API，仓库根目录还提供一个本地 CLI：
+
+- `./sts`
+
+它的目标不是替代 API，而是把最常用查询固化为固定命令，进一步降低 agent 的试错成本。
+
+常用命令：
+
+- `./sts ping`
+- `./sts capabilities`
+- `./sts context`
+- `./sts next`
+- `./sts combat actions`
+- `./sts combat hand`
+- `./sts combat enemies`
+- `./sts player summary`
+- `./sts player deck`
+- `./sts get /api/v1/...`
+
+其中：
+
+- `./sts next`
+  会合并查询 `context` 和 `compact observation`
+- `./sts combat actions`
+  会直接返回当前合法动作集
+- `./sts get`
+  允许在需要时访问任意底层 endpoint
+
 ### 通用入口
 
 - `/api/v1/context`

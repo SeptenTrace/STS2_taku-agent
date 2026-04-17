@@ -1,0 +1,173 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+BASE_URL="${STS_OBSERVER_URL:-http://127.0.0.1:15527}"
+CURL_BIN="${CURL_BIN:-$(command -v curl)}"
+JQ_BIN="${JQ_BIN:-$(command -v jq || true)}"
+
+print_usage() {
+  cat <<'EOF'
+Usage:
+  ./sts help
+  ./sts ping
+  ./sts capabilities
+  ./sts context
+  ./sts next
+  ./sts compact
+  ./sts run
+  ./sts player [summary|deck|relics|potions|status]
+  ./sts combat [summary|actions|hand|enemies|piles]
+  ./sts map
+  ./sts event
+  ./sts shop
+  ./sts rest-site
+  ./sts rewards
+  ./sts card-reward
+  ./sts card-selection
+  ./sts treasure
+  ./sts full
+  ./sts get /api/v1/...
+
+Environment:
+  STS_OBSERVER_URL   Override observer server base URL.
+
+Examples:
+  ./sts ping
+  ./sts next
+  ./sts combat actions
+  ./sts player summary
+  ./sts get /api/v1/state/full
+EOF
+}
+
+pretty_print() {
+  if [[ -n "${JQ_BIN:-}" ]]; then
+    "${JQ_BIN}" .
+  else
+    cat
+  fi
+}
+
+request() {
+  local path="$1"
+  "${CURL_BIN}" -fsS "${BASE_URL}${path}"
+}
+
+request_and_print() {
+  local path="$1"
+  request "${path}" | pretty_print
+}
+
+command_ping() {
+  request_and_print "/"
+}
+
+command_capabilities() {
+  request_and_print "/api/v1/capabilities"
+}
+
+command_context() {
+  request_and_print "/api/v1/context"
+}
+
+command_next() {
+  local context_json
+  local compact_json
+
+  context_json="$(request "/api/v1/context")"
+  compact_json="$(request "/api/v1/observation/compact")"
+
+  if [[ -n "${JQ_BIN:-}" ]]; then
+    "${JQ_BIN}" -n \
+      --argjson context "${context_json}" \
+      --argjson observation "${compact_json}" \
+      '{context: $context, observation: $observation}'
+  else
+    printf '%s\n' "Context:"
+    printf '%s\n' "${context_json}"
+    printf '\n%s\n' "Observation:"
+    printf '%s\n' "${compact_json}"
+  fi
+}
+
+command_compact() {
+  request_and_print "/api/v1/observation/compact"
+}
+
+command_run() {
+  request_and_print "/api/v1/run"
+}
+
+command_player() {
+  local section="${1:-summary}"
+  case "${section}" in
+    summary) request_and_print "/api/v1/player/summary" ;;
+    deck) request_and_print "/api/v1/player/deck" ;;
+    relics) request_and_print "/api/v1/player/relics" ;;
+    potions) request_and_print "/api/v1/player/potions" ;;
+    status) request_and_print "/api/v1/player/status" ;;
+    *)
+      printf 'Unknown player subcommand: %s\n' "${section}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+command_combat() {
+  local section="${1:-summary}"
+  case "${section}" in
+    summary) request_and_print "/api/v1/combat/summary" ;;
+    actions) request_and_print "/api/v1/combat/actions" ;;
+    hand) request_and_print "/api/v1/combat/hand" ;;
+    enemies) request_and_print "/api/v1/combat/enemies" ;;
+    piles) request_and_print "/api/v1/combat/piles" ;;
+    *)
+      printf 'Unknown combat subcommand: %s\n' "${section}" >&2
+      exit 1
+      ;;
+  esac
+}
+
+command_get() {
+  local path="${1:-}"
+  if [[ -z "${path}" ]]; then
+    printf 'Usage: ./sts get /api/v1/...\n' >&2
+    exit 1
+  fi
+
+  request_and_print "${path}"
+}
+
+main() {
+  local command="${1:-help}"
+  shift || true
+
+  case "${command}" in
+    help|-h|--help) print_usage ;;
+    ping) command_ping ;;
+    capabilities) command_capabilities ;;
+    context) command_context ;;
+    next) command_next ;;
+    compact|observe|observation) command_compact ;;
+    run) command_run ;;
+    player) command_player "$@" ;;
+    combat) command_combat "$@" ;;
+    map) request_and_print "/api/v1/map/summary" ;;
+    event) request_and_print "/api/v1/event" ;;
+    shop) request_and_print "/api/v1/shop" ;;
+    rest-site|rest) request_and_print "/api/v1/rest-site" ;;
+    rewards) request_and_print "/api/v1/rewards" ;;
+    card-reward) request_and_print "/api/v1/card-reward" ;;
+    card-selection|card-select) request_and_print "/api/v1/card-selection" ;;
+    treasure) request_and_print "/api/v1/treasure" ;;
+    full) request_and_print "/api/v1/state/full" ;;
+    get) command_get "$@" ;;
+    *)
+      printf 'Unknown command: %s\n\n' "${command}" >&2
+      print_usage >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

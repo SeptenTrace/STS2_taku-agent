@@ -48,6 +48,13 @@ Observation server:
 - `http://localhost:15527/api/v1/observation/compact`
 - `http://localhost:15527/api/v1/combat/actions`
 
+Local CLI:
+- `./sts ping`
+- `./sts next`
+- `./sts combat actions`
+- `./sts player summary`
+- `./sts get /api/v1/state/full`
+
 Current low-token combat flow:
 - `context` -> current scene classification
 - `compact observation` -> minimal decision facts
