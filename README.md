@@ -137,6 +137,8 @@ CLI implementation notes:
 - `./sts` is a thin launcher that runs `tools/sts-cli/main.ts`
 - the CLI uses Node's built-in TypeScript stripping on Node 24+
 - run `npm run check` to type-check the CLI implementation
+- `tools/sts-cli/core/` contains shared runtime pieces such as HTTP, JSON handling, errors, and output
+- `tools/sts-cli/commands/` contains command-specific logic such as `exec` payload building and `wait`
 
 Current low-token combat flow:
 - `context` -> current scene classification
