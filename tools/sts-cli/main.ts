@@ -2,12 +2,12 @@ import { BASE_URL } from "./config.ts";
 import { dispatch } from "./commands/dispatch.ts";
 import { CliError, HttpError } from "./core/errors.ts";
 import { HttpClient } from "./core/http.ts";
-import { printJson } from "./core/output.ts";
+import { printJson, StreamOutput } from "./core/output.ts";
 
 async function main(): Promise<void> {
   const [, , rawCommand, ...args] = process.argv;
   const client = new HttpClient(BASE_URL);
-  await dispatch(client, rawCommand ?? "help", args);
+  await dispatch(client, rawCommand ?? "help", args, new StreamOutput());
 }
 
 main().catch((error: unknown) => {

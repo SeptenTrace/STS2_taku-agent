@@ -138,6 +138,7 @@ CLI implementation notes:
 - the CLI uses Node's built-in TypeScript stripping on Node 24+
 - run `npm run check` to type-check the CLI implementation
 - run `npm run test:cli` to execute the CLI unit tests with Node's built-in test runner
+- run `npm run verify:cli` to run both type-checking and the CLI test suite
 - `tools/sts-cli/core/` contains shared runtime pieces such as HTTP, JSON handling, errors, and output
 - `tools/sts-cli/commands/` contains command-specific logic such as `exec` payload building and `wait`
 
