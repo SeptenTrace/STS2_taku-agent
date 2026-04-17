@@ -14,6 +14,7 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `src/`: C# mod source
 - `pack/`: files packaged into the `.pck`
 - `tools/`: helper scripts for packaging
+- `tools/sts-cli/`: TypeScript implementation of the repo-local CLI
 - `build_and_deploy.sh`: build locally and copy outputs into the game `mods` folder
 - `build_release.sh`: build a shareable release package
 
@@ -131,6 +132,11 @@ Local CLI:
 - `./sts player summary`
 - `./sts knowledge current`
 - `./sts get /api/v1/state/full`
+
+CLI implementation notes:
+- `./sts` is a thin launcher that runs `tools/sts-cli/main.ts`
+- the CLI uses Node's built-in TypeScript stripping on Node 24+
+- run `npm run check` to type-check the CLI implementation
 
 Current low-token combat flow:
 - `context` -> current scene classification
