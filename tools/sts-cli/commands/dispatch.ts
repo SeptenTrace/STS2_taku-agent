@@ -1,9 +1,15 @@
 import type {
   ActionSurfaceResponse,
+  CapabilitiesResponse,
   CardRewardResponse,
   ContextResponse,
+  EventResponse,
+  MapSummaryResponse,
   ObservationCompactResponse,
-  RewardsResponse
+  PingResponse,
+  PlayerSummaryResponse,
+  RewardsResponse,
+  ShopResponse
 } from "../api-types.ts";
 import type { RequestClient } from "../core/client.ts";
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
@@ -73,10 +79,10 @@ export async function dispatch(
       output.printText(usage);
       return;
     case "ping":
-      await printRequest(client, output, "/");
+      await printRequest<PingResponse>(client, output, "/");
       return;
     case "capabilities":
-      await printRequest(client, output, "/api/v1/capabilities");
+      await printRequest<CapabilitiesResponse>(client, output, "/api/v1/capabilities");
       return;
     case "context":
       await printRequest<ContextResponse>(client, output, "/api/v1/context");
@@ -102,19 +108,24 @@ export async function dispatch(
       await commandFromMap(client, output, args[0], knowledgePaths, "knowledge");
       return;
     case "player":
+      if ((args[0] ?? "summary") === "summary") {
+        await printRequest<PlayerSummaryResponse>(client, output, "/api/v1/player/summary");
+        return;
+      }
+
       await commandFromMap(client, output, args[0], playerPaths, "player");
       return;
     case "combat":
       await commandFromMap(client, output, args[0], combatPaths, "combat");
       return;
     case "map":
-      await printRequest(client, output, "/api/v1/map/summary");
+      await printRequest<MapSummaryResponse>(client, output, "/api/v1/map/summary");
       return;
     case "event":
-      await printRequest(client, output, "/api/v1/event");
+      await printRequest<EventResponse>(client, output, "/api/v1/event");
       return;
     case "shop":
-      await printRequest(client, output, "/api/v1/shop");
+      await printRequest<ShopResponse>(client, output, "/api/v1/shop");
       return;
     case "rest":
     case "rest-site":

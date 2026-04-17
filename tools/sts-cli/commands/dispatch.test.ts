@@ -63,6 +63,56 @@ test("dispatch actions uses the typed actions endpoint", async () => {
   });
 });
 
+test("dispatch player summary uses the typed player summary endpoint", async () => {
+  const client = new MockClient({
+    "/api/v1/player/summary": {
+      characterId: "IRONCLAD",
+      character: "铁甲战士",
+      currentHp: 80,
+      maxHp: 80,
+      block: 0,
+      gold: 99,
+      deckCount: 12,
+      uniqueCards: 5,
+      upgradedCards: 0,
+      relicIds: ["BURNING_BLOOD"],
+      potionIds: [],
+      status: []
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "player", ["summary"], output);
+
+  assert.deepEqual(client.requests.map((entry) => entry.path), ["/api/v1/player/summary"]);
+  assert.equal((output.jsonValues[0] as { characterId: string }).characterId, "IRONCLAD");
+});
+
+test("dispatch map uses the typed map endpoint", async () => {
+  const client = new MockClient({
+    "/api/v1/map/summary": {
+      currentPosition: {
+        col: 3,
+        row: 2,
+        type: "Unknown"
+      },
+      nextOptions: [],
+      boss: {
+        col: 3,
+        row: 16,
+        type: "Boss"
+      },
+      visitedCount: 3
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "map", [], output);
+
+  assert.deepEqual(client.requests.map((entry) => entry.path), ["/api/v1/map/summary"]);
+  assert.equal((output.jsonValues[0] as { visitedCount: number }).visitedCount, 3);
+});
+
 test("dispatch rejects unknown subcommands with CliError", async () => {
   const client = new MockClient({});
   const output = new MockOutput();
