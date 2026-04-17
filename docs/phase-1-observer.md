@@ -79,15 +79,23 @@
 src/
   Diagnostics/
     BattleStateCaptureService.cs
+  Observation/
+    ObservationApiCatalog.cs
+    ObservationServer.cs
   Patches/
     BattleStateCapturePatches.cs
   State/
     Builders/
       BattleSnapshotBuilder.cs
+      GameSnapshotBuilder.cs
     Exporters/
       SnapshotFileExporter.cs
     Snapshots/
       BattleSnapshot.cs
+      GameSnapshot.cs
+    Support/
+      ObservationText.cs
+      GodotNodeSearch.cs
     Validation/
       BattleSnapshotValidator.cs
 ```
@@ -152,12 +160,72 @@ src/
 
 - `combat_setup`
 - `after_player_turn_start`
+- `after_card_played`
 
 当前输出路径:
 
 - `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/`
 
+当前本地观察入口:
+
+- HTTP server: `http://localhost:15527/`
+- CLI: `./sts`
+
 这说明阶段一的“状态读取层”已经不是纸面规划，而是有运行时 JSON 快照产出的原型实现。
+
+## 2.6 当前阶段一已完成事项
+
+已经完成:
+
+- 战斗状态快照模型
+- 出牌后动作历史记录
+- 面向调试的 JSON 快照导出
+- 面向模型的 `GameSnapshot` 统一状态容器
+- `context` 场景识别
+- `compact observation` 紧凑观察层
+- 细粒度只读 API
+- 本地 CLI 封装
+- 基础低 token 战斗流
+
+当前战斗查询推荐路径:
+
+1. `context`
+2. `combat/summary`
+3. `combat/actions`
+4. `combat/enemies`
+5. 必要时再查 `combat/hand`
+
+这条路径已经比“每次读取完整战斗状态”更适合大模型。
+
+## 2.7 参考源与当前差异
+
+`STS2MCP` 是当前非常有价值的参考源，尤其在下面几方面:
+
+- Hook 覆盖范围
+- 房间 / overlay 场景识别
+- 运行时对象读取方式
+- 各类 UI 和房间状态的拼装方法
+
+但当前仓库的目标不只是复刻它的状态读取能力。
+
+当前设计的重点差异是:
+
+- 我们更强调低 token
+- 我们更强调模型默认查询路径
+- 我们更强调细粒度 endpoint 与 CLI 封装
+- 我们不鼓励默认读取 `full state`
+
+也就是说，`STS2MCP` 更像“完整游戏接口层”，而当前仓库阶段一要做的是“面向 LLM 的节流观察层”。
+
+## 2.8 下一步
+
+阶段一接下来需要继续做的事情:
+
+- 给 `combat/actions` 增加更强的语义摘要
+- 增加 `delta observation`
+- 为地图、奖励、商店、事件增加对应的动作层
+- 把静态知识和动态状态进一步拆分
+- 明确一套后续阶段二可直接依赖的稳定观察契约
 
 ## 3. 阶段一任务拆分
 
