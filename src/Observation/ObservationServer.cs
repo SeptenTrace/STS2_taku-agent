@@ -532,10 +532,18 @@ internal static class ObservationServer
         if (actionType == "end_turn" &&
             startedInCombat &&
             stillInCombat &&
-            currentSnapshot.Combat is not null &&
-            currentSnapshot.Combat.Side.Equals("enemy", StringComparison.OrdinalIgnoreCase))
+            currentSnapshot.Combat is not null)
         {
-            return true;
+            if (currentSnapshot.Combat.Side.Equals("enemy", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (currentSnapshot.Combat.Side.Equals("player", StringComparison.OrdinalIgnoreCase) &&
+                (currentSnapshot.Combat.AvailableActions.Count == 0 || currentSnapshot.Combat.Hand.Count == 0))
+            {
+                return true;
+            }
         }
 
         if (actionType == "select_card_reward" &&
@@ -551,10 +559,23 @@ internal static class ObservationServer
         }
 
         if (actionType == "choose_map_node" &&
+            string.Equals(currentSnapshot.Context.StateType, "unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        if (actionType == "choose_map_node" &&
             string.Equals(beforeSnapshot.Context.StateType, "map", StringComparison.OrdinalIgnoreCase) &&
             string.Equals(currentSnapshot.Context.StateType, "map", StringComparison.OrdinalIgnoreCase) &&
             currentSnapshot.Map is not null &&
             currentSnapshot.Map.NextOptions.Count == 0)
+        {
+            return true;
+        }
+
+        if (actionType is "proceed" or "choose_event_option" or "confirm_selection" &&
+            string.Equals(beforeSnapshot.Context.StateType, "unknown", StringComparison.OrdinalIgnoreCase) == false &&
+            string.Equals(currentSnapshot.Context.StateType, "unknown", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }

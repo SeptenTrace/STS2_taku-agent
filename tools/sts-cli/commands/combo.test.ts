@@ -6,10 +6,30 @@ import { MockClient } from "../test-helpers/mock-client.ts";
 
 test("waitForPlayerReady resolves on rewards screens", async () => {
   const client = new MockClient({
-    "/api/v1/context": {
-      stateType: "rewards",
-      roomType: "Monster"
-    }
+    "/api/v1/context": [
+      {
+        stateType: "rewards",
+        roomType: "Monster"
+      },
+      {
+        stateType: "rewards",
+        roomType: "Monster"
+      }
+    ],
+    "/api/v1/actions": [
+      {
+        stateType: "rewards",
+        actions: [
+          { actionType: "proceed", label: "Proceed" }
+        ]
+      },
+      {
+        stateType: "rewards",
+        actions: [
+          { actionType: "proceed", label: "Proceed" }
+        ]
+      }
+    ]
   });
 
   const result = await waitForPlayerReady(client);

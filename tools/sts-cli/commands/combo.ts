@@ -18,23 +18,9 @@ import type {
   ShopResponse,
   TreasureResponse
 } from "../api-types.ts";
+import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
 import type { RequestClient } from "../core/client.ts";
-import { CliError } from "../core/errors.ts";
-
-const READY_STATES = new Set([
-  "rewards",
-  "map",
-  "event",
-  "fake_merchant",
-  "shop",
-  "rest_site",
-  "treasure",
-  "card_reward",
-  "card_select",
-  "bundle_select",
-  "relic_select",
-  "crystal_sphere"
-]);
+import { waitForCondition } from "./wait.ts";
 
 type RoomStateData =
   | { kind: "combat"; path: "/api/v1/combat/summary"; data: CombatSummaryResponse }
@@ -79,35 +65,14 @@ export interface RoomSummaryResult {
   stateData?: RoomStateData;
 }
 
-function isCombatState(stateType: string | undefined): boolean {
-  return stateType === "monster" || stateType === "elite" || stateType === "boss";
-}
-
 export async function waitForPlayerReady(client: RequestClient): Promise<PlayerReadyResult> {
-  const context = await client.request<ContextResponse>("/api/v1/context");
-  if (READY_STATES.has(context.stateType)) {
-    return {
-      condition: "player_ready",
-      matched: true,
-      context
-    };
-  }
-
-  if (isCombatState(context.stateType)) {
-    const combat = await client.request<CombatSummaryResponse>("/api/v1/combat/summary");
-    if (combat.side !== "player") {
-      throw new CliError(`State is not player-ready yet: combat side is '${combat.side}'.`);
-    }
-
-    return {
-      condition: "player_ready",
-      matched: true,
-      context,
-      combat
-    };
-  }
-
-  throw new CliError(`State is not player-ready: ${context.stateType}`);
+  const result = await waitForCondition(client, "player_ready", DEFAULT_WAIT_TIMEOUT_SECONDS);
+  return {
+    condition: "player_ready",
+    matched: true,
+    context: result.context,
+    combat: result.combat
+  };
 }
 
 function isSafeReward(item: RewardsResponse["items"][number]): boolean {
