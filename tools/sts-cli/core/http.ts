@@ -1,19 +1,15 @@
 import { HttpError } from "./errors.ts";
-import { parseJsonOrText, type JsonObject } from "./json.ts";
+import { parseJsonOrText } from "./json.ts";
+import type { RequestClient, RequestOptions } from "./client.ts";
 
-export interface RequestOptions {
-  method?: "GET" | "POST";
-  body?: JsonObject;
-}
-
-export class HttpClient {
+export class HttpClient implements RequestClient {
   readonly baseUrl: string;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
 
-  async request(path: string, options: RequestOptions = {}): Promise<unknown> {
+  async request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
     const method = options.method ?? "GET";
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
@@ -28,6 +24,6 @@ export class HttpClient {
       throw new HttpError(response.status, method, path, parsed);
     }
 
-    return parsed;
+    return parsed as T;
   }
 }

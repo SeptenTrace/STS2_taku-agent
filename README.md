@@ -137,6 +137,7 @@ CLI implementation notes:
 - `./sts` is a thin launcher that runs `tools/sts-cli/main.ts`
 - the CLI uses Node's built-in TypeScript stripping on Node 24+
 - run `npm run check` to type-check the CLI implementation
+- run `npm run test:cli` to execute the CLI unit tests with Node's built-in test runner
 - `tools/sts-cli/core/` contains shared runtime pieces such as HTTP, JSON handling, errors, and output
 - `tools/sts-cli/commands/` contains command-specific logic such as `exec` payload building and `wait`
 

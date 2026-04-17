@@ -1,6 +1,7 @@
+import type { ContextResponse, ObservationCompactResponse } from "../api-types.ts";
+import type { RequestClient } from "../core/client.ts";
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
 import { CliError } from "../core/errors.ts";
-import { HttpClient } from "../core/http.ts";
 import { printJson, printText } from "../core/output.ts";
 import { buildExecPayload } from "./exec.ts";
 import { waitForCondition } from "./wait.ts";
@@ -30,20 +31,20 @@ const combatPaths: Record<string, string> = {
   piles: "/api/v1/combat/piles"
 };
 
-async function printRequest(client: HttpClient, path: string): Promise<void> {
+async function printRequest(client: RequestClient, path: string): Promise<void> {
   printJson(await client.request(path));
 }
 
-async function commandNext(client: HttpClient): Promise<void> {
+async function commandNext(client: RequestClient): Promise<void> {
   const [context, observation] = await Promise.all([
-    client.request("/api/v1/context"),
-    client.request("/api/v1/observation/compact")
+    client.request<ContextResponse>("/api/v1/context"),
+    client.request<ObservationCompactResponse>("/api/v1/observation/compact")
   ]);
 
   printJson({ context, observation });
 }
 
-async function commandFromMap(client: HttpClient, section: string | undefined, pathMap: Record<string, string>, label: string): Promise<void> {
+async function commandFromMap(client: RequestClient, section: string | undefined, pathMap: Record<string, string>, label: string): Promise<void> {
   const resolvedSection = section ?? Object.keys(pathMap)[0];
   const path = pathMap[resolvedSection];
   if (!path) {
@@ -53,7 +54,7 @@ async function commandFromMap(client: HttpClient, section: string | undefined, p
   await printRequest(client, path);
 }
 
-export async function dispatch(client: HttpClient, command: string, args: string[]): Promise<void> {
+export async function dispatch(client: RequestClient, command: string, args: string[]): Promise<void> {
   switch (command) {
     case "help":
     case "-h":
