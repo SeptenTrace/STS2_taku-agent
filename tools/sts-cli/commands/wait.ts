@@ -89,7 +89,7 @@ async function maybeReadCombatSummary(client: RequestClient, context: ContextRes
 }
 
 async function maybeReadActionSurface(client: RequestClient, context: ContextResponse, condition: string): Promise<ActionSurfaceResponse | null> {
-  const shouldReadActions = condition === "player_ready" || isInteractiveReadyState(context.stateType) || context.stateType === condition;
+  const shouldReadActions = condition === "player_ready" || condition === "run_active" || isInteractiveReadyState(context.stateType) || context.stateType === condition;
   if (!shouldReadActions || isCombatState(context.stateType)) {
     return null;
   }
@@ -107,7 +107,7 @@ async function maybeReadActionSurface(client: RequestClient, context: ContextRes
 
 async function readWaitObservation(client: RequestClient, condition: string): Promise<WaitObservation> {
   const context = await client.request<ContextResponse>("/api/v1/context");
-  const combat = condition === "player_turn" || condition === "enemy_turn" || condition === "player_ready" || isCombatState(condition)
+  const combat = condition === "player_turn" || condition === "enemy_turn" || condition === "player_ready" || condition === "run_active" || isCombatState(condition)
     ? await maybeReadCombatSummary(client, context)
     : null;
   const actions = await maybeReadActionSurface(client, context, condition);
@@ -135,6 +135,22 @@ function observationMatchesCondition(observation: WaitObservation, condition: st
 
     return isInteractiveReadyState(observation.context.stateType) &&
       hasPrimaryAction(observation.actions, observation.context.stateType);
+  }
+
+  if (condition === "run_active") {
+    if (observation.context.stateType === "menu" || observation.context.stateType === "unknown") {
+      return false;
+    }
+
+    if (isCombatState(observation.context.stateType)) {
+      return observation.combat !== null;
+    }
+
+    if (isInteractiveReadyState(observation.context.stateType)) {
+      return hasPrimaryAction(observation.actions, observation.context.stateType);
+    }
+
+    return true;
   }
 
   if (!contextStateTypeMatches(observation.context, condition)) {

@@ -12,6 +12,7 @@ internal static class ObservationApiCatalog
     public static IReadOnlyList<ObservationEndpointDescriptor> Endpoints { get; } =
     [
         new("/api/v1/context", "low", "Current state type and recommended follow-up queries.", "Always call first.", ["*"]),
+        new("/api/v1/menu", "low", "Main-menu resume availability.", "Use when stateType is menu and you need to know whether continue_game is available.", ["menu"]),
         new("/api/v1/observation/compact", "low", "Compact LLM-oriented observation for the active screen.", "Use when you want the minimum decision context.", ["*"]),
         new("/api/v1/observation/delta", "low", "Incremental changes since the previous distinct observation.", "Use after actions or screen transitions to avoid rereading full sections.", ["*"]),
         new("/api/v1/actions/execute", "write", "Execute one action using the existing low-token action contract and return a linked delta.", "Use after /api/v1/actions once you have chosen a legal action.", ["*"]),

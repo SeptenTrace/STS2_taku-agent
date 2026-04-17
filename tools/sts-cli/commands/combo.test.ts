@@ -99,6 +99,7 @@ test("buildRoomSummary combines context, player, actions, and state data", async
 
   const result = await buildRoomSummary(client);
   assert.equal(result.context.stateType, "rewards");
+  assert.ok(result.playerSummary);
   assert.equal(result.playerSummary.characterId, "IRONCLAD");
   assert.equal(result.stateData?.kind, "rewards");
 });

@@ -21,6 +21,7 @@ using MegaCrit.Sts2.Core.Nodes.Relics;
 using MegaCrit.Sts2.Core.Nodes.Rewards;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
+using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
@@ -42,13 +43,15 @@ internal sealed class GameSnapshotBuilder
 
         if (!RunManager.Instance.IsInProgress)
         {
-            ContextSnapshot menuContext = BuildContext("menu", null, null, true, false);
+            MenuStateSnapshot menu = BuildMenuState();
+            ContextSnapshot menuContext = BuildContext("menu", null, null, menu.IsVisible, !menu.IsVisible);
             return new GameSnapshot(
                 Timestamp: timestamp,
                 Context: menuContext,
+                Menu: menu,
                 Run: null,
                 Player: null,
-                CompactObservation: BuildCompactObservation(menuContext, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null),
+                CompactObservation: BuildCompactObservation(menuContext, menu, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null),
                 Combat: null,
                 Map: null,
                 Rewards: null,
@@ -72,9 +75,10 @@ internal sealed class GameSnapshotBuilder
             return new GameSnapshot(
                 Timestamp: timestamp,
                 Context: unknownContext,
+                Menu: null,
                 Run: null,
                 Player: null,
-                CompactObservation: BuildCompactObservation(unknownContext, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null),
+                CompactObservation: BuildCompactObservation(unknownContext, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null),
                 Combat: null,
                 Map: null,
                 Rewards: null,
@@ -225,6 +229,7 @@ internal sealed class GameSnapshotBuilder
         ContextSnapshot context = BuildContext(stateType, currentRoom?.RoomType.ToString(), contextOverlayType, isStable, isTransitioning);
         CompactObservationSnapshot compactObservation = BuildCompactObservation(
             context,
+            null,
             playerState,
             combat,
             map,
@@ -244,6 +249,7 @@ internal sealed class GameSnapshotBuilder
         return new GameSnapshot(
             Timestamp: timestamp,
             Context: context,
+            Menu: null,
             Run: run,
             Player: playerState,
             CompactObservation: compactObservation,
@@ -272,6 +278,29 @@ internal sealed class GameSnapshotBuilder
             IsStable: isStable,
             IsTransitioning: isTransitioning,
             RecommendedQueries: GetRecommendedQueries(stateType));
+    }
+
+    private static MenuStateSnapshot BuildMenuState()
+    {
+        SceneTree tree = (SceneTree)Engine.GetMainLoop();
+        NMainMenu? mainMenu = GodotNodeSearch.FindFirst<NMainMenu>(tree.Root);
+        NMainMenuContinueButton? continueButton = mainMenu is null
+            ? null
+            : GodotNodeSearch.FindFirst<NMainMenuContinueButton>(mainMenu);
+
+        bool isVisible = mainMenu?.IsVisibleInTree() == true;
+        bool hasContinueRun = mainMenu?.ContinueRunInfo?.HasResult == true;
+        bool canContinue = isVisible &&
+            hasContinueRun &&
+            continueButton is { IsEnabled: true } &&
+            continueButton.IsVisibleInTree();
+
+        string? continueLabel = continueButton is null ? null : ReadControlText(continueButton);
+        return new MenuStateSnapshot(
+            IsVisible: isVisible,
+            HasContinueRun: hasContinueRun,
+            CanContinue: canContinue,
+            ContinueLabel: continueLabel);
     }
 
     private static (bool IsStable, bool IsTransitioning) EvaluateStateStability(
@@ -1457,7 +1486,7 @@ internal sealed class GameSnapshotBuilder
     {
         return stateType switch
         {
-            "menu" => ["/api/v1/context"],
+            "menu" => ["/api/v1/context", "/api/v1/menu", "/api/v1/actions"],
             "map" => ["/api/v1/context", "/api/v1/map/summary", "/api/v1/actions", "/api/v1/player/summary"],
             "event" => ["/api/v1/context", "/api/v1/event", "/api/v1/actions", "/api/v1/player/summary"],
             "fake_merchant" => ["/api/v1/context", "/api/v1/fake-merchant", "/api/v1/actions", "/api/v1/player/summary"],
@@ -1486,6 +1515,7 @@ internal sealed class GameSnapshotBuilder
 
     private static CompactObservationSnapshot BuildCompactObservation(
         ContextSnapshot context,
+        MenuStateSnapshot? menu,
         PlayerStateSnapshot? player,
         CombatStateSnapshot? combat,
         MapStateSnapshot? map,
@@ -1518,7 +1548,13 @@ internal sealed class GameSnapshotBuilder
         switch (context.StateType)
         {
             case "menu":
-                goal = "No run is active. Start or load a run before querying deeper state.";
+                goal = menu?.CanContinue == true
+                    ? "Resume the saved run from the main menu before querying deeper state."
+                    : "No run is active. Start or load a run before querying deeper state.";
+                if (menu is not null)
+                {
+                    facts.Add($"Main menu visible {menu.IsVisible}, continue available {menu.CanContinue}.");
+                }
                 break;
             case "monster":
             case "elite":

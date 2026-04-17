@@ -10,6 +10,7 @@ import type {
   EventResponse,
   FakeMerchantResponse,
   MapSummaryResponse,
+  MenuResponse,
   OverlayResponse,
   PlayerSummaryResponse,
   RelicSelectionResponse,
@@ -21,6 +22,7 @@ import type {
 import type { RequestClient } from "../core/client.ts";
 
 type RoomStateData =
+  | { kind: "menu"; path: "/api/v1/menu"; data: MenuResponse }
   | { kind: "combat"; path: "/api/v1/combat/summary"; data: CombatSummaryResponse }
   | { kind: "map"; path: "/api/v1/map/summary"; data: MapSummaryResponse }
   | { kind: "event"; path: "/api/v1/event"; data: EventResponse }
@@ -51,7 +53,7 @@ export interface ClaimAllSafeResult {
 
 export interface RoomSummaryResult {
   context: ContextResponse;
-  playerSummary: PlayerSummaryResponse;
+  playerSummary?: PlayerSummaryResponse;
   actions: ActionSurfaceResponse;
   stateData?: RoomStateData;
 }
@@ -111,6 +113,12 @@ export async function claimAllSafeRewards(client: RequestClient): Promise<ClaimA
 
 async function readStateData(client: RequestClient, context: ContextResponse): Promise<RoomStateData | undefined> {
   switch (context.stateType) {
+    case "menu":
+      return {
+        kind: "menu",
+        path: "/api/v1/menu",
+        data: await client.request<MenuResponse>("/api/v1/menu")
+      };
     case "monster":
     case "elite":
     case "boss":
@@ -203,11 +211,13 @@ async function readStateData(client: RequestClient, context: ContextResponse): P
 }
 
 export async function buildRoomSummary(client: RequestClient): Promise<RoomSummaryResult> {
-  const [context, playerSummary, actions] = await Promise.all([
+  const [context, actions] = await Promise.all([
     client.request<ContextResponse>("/api/v1/context"),
-    client.request<PlayerSummaryResponse>("/api/v1/player/summary"),
     client.request<ActionSurfaceResponse>("/api/v1/actions")
   ]);
+  const playerSummary = context.stateType === "menu"
+    ? undefined
+    : await client.request<PlayerSummaryResponse>("/api/v1/player/summary");
 
   return {
     context,

@@ -113,6 +113,23 @@ test("dispatch map uses the typed map endpoint", async () => {
   assert.equal((output.jsonValues[0] as { visitedCount: number }).visitedCount, 3);
 });
 
+test("dispatch menu uses the typed menu endpoint", async () => {
+  const client = new MockClient({
+    "/api/v1/menu": {
+      isVisible: true,
+      hasContinueRun: true,
+      canContinue: true,
+      continueLabel: "继续游戏"
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "menu", [], output);
+
+  assert.deepEqual(client.requests.map((entry) => entry.path), ["/api/v1/menu"]);
+  assert.equal((output.jsonValues[0] as { canContinue: boolean }).canContinue, true);
+});
+
 test("dispatch room summary writes combined room data", async () => {
   const client = new MockClient({
     "/api/v1/context": {
@@ -147,6 +164,38 @@ test("dispatch room summary writes combined room data", async () => {
   await dispatch(client, "room", ["summary"], output);
 
   assert.equal((output.jsonValues[0] as { context: { stateType: string } }).context.stateType, "rewards");
+});
+
+test("dispatch room summary handles menu without querying player summary", async () => {
+  const client = new MockClient({
+    "/api/v1/context": {
+      stateType: "menu",
+      isStable: true,
+      isTransitioning: false
+    },
+    "/api/v1/actions": {
+      stateType: "menu",
+      actions: [
+        { actionType: "continue_game", label: "Continue game" }
+      ]
+    },
+    "/api/v1/menu": {
+      isVisible: true,
+      hasContinueRun: true,
+      canContinue: true,
+      continueLabel: "继续游戏"
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "room", ["summary"], output);
+
+  assert.deepEqual(client.requests.map((entry) => entry.path), [
+    "/api/v1/context",
+    "/api/v1/actions",
+    "/api/v1/menu"
+  ]);
+  assert.equal((output.jsonValues[0] as { playerSummary?: unknown }).playerSummary, undefined);
 });
 
 test("dispatch bundle-selection uses the typed bundle endpoint", async () => {

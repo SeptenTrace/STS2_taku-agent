@@ -9,6 +9,7 @@ import type {
   EventResponse,
   FakeMerchantResponse,
   MapSummaryResponse,
+  MenuResponse,
   ObservationCompactResponse,
   OverlayResponse,
   PingResponse,
@@ -93,6 +94,9 @@ export async function dispatch(
       return;
     case "context":
       await printRequest<ContextResponse>(client, output, "/api/v1/context");
+      return;
+    case "menu":
+      await printRequest<MenuResponse>(client, output, "/api/v1/menu");
       return;
     case "next":
       await commandNext(client, output);

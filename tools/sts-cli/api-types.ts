@@ -20,6 +20,13 @@ export interface ContextResponse {
   recommendedQueries?: string[];
 }
 
+export interface MenuResponse {
+  isVisible: boolean;
+  hasContinueRun: boolean;
+  canContinue: boolean;
+  continueLabel?: string;
+}
+
 export interface PlayerStatusEntry {
   id: string;
   title: string;

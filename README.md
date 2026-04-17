@@ -121,6 +121,7 @@ Observation server:
 - `http://localhost:15527/`
 - `http://localhost:15527/api/v1/capabilities`
 - `http://localhost:15527/api/v1/context`
+- `http://localhost:15527/api/v1/menu`
 - `http://localhost:15527/api/v1/observation/compact`
 - `http://localhost:15527/api/v1/observation/delta`
 - `http://localhost:15527/api/v1/actions`
@@ -146,6 +147,8 @@ Observation server:
 
 Local CLI:
 - `./sts ping`
+- `./sts context`
+- `./sts menu`
 - `./sts next`
 - `./sts delta`
 - `./sts actions`
@@ -160,6 +163,8 @@ Local CLI:
 - `./sts relic-selection`
 - `./sts crystal-sphere`
 - `./sts overlay`
+- `./sts exec continue_game`
+- `./sts wait run-active`
 - `./sts wait player-ready`
 - `./sts exec proceed --wait-for map`
 - `./sts get /api/v1/state/full`
@@ -175,20 +180,24 @@ CLI implementation notes:
 
 Higher-level CLI helpers:
 - `./sts room summary` returns one combined snapshot for the current actionable room
+- `./sts menu` reports whether the main menu can currently resume the saved run
+- `./sts wait run-active` waits for the game to leave the main menu and settle into a stable in-run state
 - `./sts wait player-ready` waits for a stable player-actionable state or player combat turn
 - `./sts wait rewards` / `./sts wait map` / `./sts wait monster` wait for a stable matching room state, not just a one-frame context match
 - `./sts exec ACTION ... --wait-for CONDITION` executes an action and then blocks until the requested stable follow-up state is reached
 - `./sts rewards claim-all-safe` automatically claims deterministic non-card rewards and stops before card choice
 
 Local development helpers:
-- `./restart_game.sh --wait-for-server` restarts the game and waits for the observer server to respond
-- `./dev_cycle.sh` runs the full build -> deploy -> restart -> wait loop
+- `./restart_game.sh --wait-for-server` restarts the game, waits for the observer server, and auto-resumes the saved run when the main menu exposes `continue_game`
+- `./dev_cycle.sh` runs the full build -> deploy -> restart -> wait loop, including the same auto-continue behavior
 - `./dev_cycle.sh --smoke` adds a basic `./sts ping`, `./sts context`, and `./sts actions` verification pass after restart
+- set `STS2_AUTO_CONTINUE=0` or pass `--no-auto-continue` to leave the game on the main menu after restart
 
 Transition handling:
 - `./sts context` is the first place to check whether a screen is actionable
 - if `isTransitioning=true`, treat the current frame as non-actionable and wait
 - `/api/v1/actions` is intentionally empty during known transient states so agents do not fire against half-settled UI
+- when `stateType=menu`, `/api/v1/menu` tells you whether `/api/v1/actions` should expose `continue_game`
 
 Current low-token combat flow:
 - `context` -> current scene classification
@@ -204,6 +213,7 @@ Recommended execution flow:
 - `actions` -> pick one legal action
 - `exec ... --wait-for ...` -> execute and wait for the next stable state when a transition is expected
 - `delta observation` or `room summary` -> inspect the new stable state
+- if a restart lands on the main menu, use `exec continue_game --wait-for run_active` before querying run-specific endpoints
 
 The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
 

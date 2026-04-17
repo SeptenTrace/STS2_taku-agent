@@ -7,6 +7,7 @@ STS2_GAME_BIN="${STS2_GAME_BIN:-$STS2_APP_PATH/Contents/MacOS/Slay the Spire 2}"
 STS_OBSERVER_URL="${STS_OBSERVER_URL:-http://127.0.0.1:15527}"
 STS2_STEAM_APP_ID="${STS2_STEAM_APP_ID:-2868840}"
 STS2_LAUNCH_DIRECT="${STS2_LAUNCH_DIRECT:-0}"
+STS2_AUTO_CONTINUE="${STS2_AUTO_CONTINUE:-1}"
 
 WAIT_FOR_SERVER=0
 SERVER_TIMEOUT_SECONDS=90
@@ -19,6 +20,7 @@ Usage:
   ./restart_game.sh
   ./restart_game.sh --wait-for-server
   ./restart_game.sh --wait-for-server --server-timeout 120
+  ./restart_game.sh --no-auto-continue
   ./restart_game.sh --no-force-kill
 
 Environment:
@@ -27,6 +29,7 @@ Environment:
   STS_OBSERVER_URL   Override the observer base URL. Default: http://127.0.0.1:15527
   STS2_STEAM_APP_ID  Override the Steam app id. Default: 2868840
   STS2_LAUNCH_DIRECT Set to 1 to launch the .app directly instead of using Steam.
+  STS2_AUTO_CONTINUE Set to 0 to leave the game on the main menu after restart.
 EOF
 }
 
@@ -46,6 +49,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --no-force-kill)
       FORCE_KILL=0
+      shift
+      ;;
+    --no-auto-continue)
+      STS2_AUTO_CONTINUE=0
       shift
       ;;
     -h|--help)
@@ -114,6 +121,78 @@ wait_for_server() {
   return 1
 }
 
+read_json_field() {
+  local field_path="$1"
+  node -e '
+const fieldPath = process.argv[1];
+const data = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+let value = data;
+for (const segment of fieldPath.split(".")) {
+  value = value?.[segment];
+}
+if (value === undefined) {
+  process.exit(2);
+}
+if (typeof value === "object" && value !== null) {
+  process.stdout.write(JSON.stringify(value));
+} else {
+  process.stdout.write(String(value));
+}
+' "$field_path"
+}
+
+read_context_state_type() {
+  STS_OBSERVER_URL="$STS_OBSERVER_URL" "$REPO_ROOT/sts" context | read_json_field "stateType"
+}
+
+wait_for_continue_button() {
+  local deadline=$((SECONDS + SERVER_TIMEOUT_SECONDS))
+  while [[ $SECONDS -lt $deadline ]]; do
+    local state_type
+    state_type="$(read_context_state_type)"
+    if [[ "$state_type" != "menu" ]]; then
+      return 0
+    fi
+
+    local can_continue
+    can_continue="$(STS_OBSERVER_URL="$STS_OBSERVER_URL" "$REPO_ROOT/sts" menu | read_json_field "canContinue" || true)"
+    if [[ "$can_continue" == "true" ]]; then
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  return 1
+}
+
+maybe_auto_continue_run() {
+  if [[ "$STS2_AUTO_CONTINUE" != "1" ]]; then
+    return 0
+  fi
+
+  local state_type
+  state_type="$(read_context_state_type)"
+  if [[ "$state_type" != "menu" ]]; then
+    return 0
+  fi
+
+  echo "Main menu detected. Checking for resumable run..."
+  if ! wait_for_continue_button; then
+    echo "No resumable run became available within ${SERVER_TIMEOUT_SECONDS}s; leaving game on the main menu."
+    return 0
+  fi
+
+  state_type="$(read_context_state_type)"
+  if [[ "$state_type" != "menu" ]]; then
+    return 0
+  fi
+
+  echo "Resuming saved run..."
+  STS_OBSERVER_URL="$STS_OBSERVER_URL" "$REPO_ROOT/sts" exec continue_game --wait-for run_active --timeout "$SERVER_TIMEOUT_SECONDS" >/dev/null
+  echo "Saved run resumed."
+}
+
 existing_pids="$(collect_game_pids)"
 if [[ -n "$existing_pids" ]]; then
   echo "Stopping $APP_NAME..."
@@ -160,6 +239,7 @@ if [[ "$WAIT_FOR_SERVER" -eq 1 ]]; then
     exit 1
   fi
   echo "Observer server is ready."
+  maybe_auto_continue_run
 fi
 
 echo "Game restart complete."

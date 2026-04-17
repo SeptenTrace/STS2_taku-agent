@@ -28,6 +28,7 @@ Environment:
   STS2_OBSERVER_URL  Forwarded to restart_game.sh and ./sts
   STS2_STEAM_APP_ID  Forwarded to restart_game.sh
   STS2_LAUNCH_DIRECT Forwarded to restart_game.sh
+  STS2_AUTO_CONTINUE Forwarded to restart_game.sh
 EOF
 }
 

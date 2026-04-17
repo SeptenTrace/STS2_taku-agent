@@ -26,6 +26,7 @@ using MegaCrit.Sts2.Core.Nodes.RestSite;
 using MegaCrit.Sts2.Core.Nodes.Rooms;
 using MegaCrit.Sts2.Core.Nodes.Screens;
 using MegaCrit.Sts2.Core.Nodes.Screens.CardSelection;
+using MegaCrit.Sts2.Core.Nodes.Screens.MainMenu;
 using MegaCrit.Sts2.Core.Nodes.Screens.Map;
 using MegaCrit.Sts2.Core.Nodes.Screens.Overlays;
 using MegaCrit.Sts2.Core.Nodes.Screens.Shops;
@@ -41,6 +42,11 @@ internal static class ActionExecutor
 {
     public static ActionExecutionOutcome Execute(string actionType, Dictionary<string, JsonElement> parameters)
     {
+        if (actionType == "continue_game")
+        {
+            return ExecuteContinueGame();
+        }
+
         if (!RunManager.Instance.IsInProgress)
         {
             return ActionExecutionOutcome.Fail("No run is active.");
@@ -94,6 +100,36 @@ internal static class ActionExecutor
         {
             return ActionExecutionOutcome.Fail($"Action '{actionType}' failed: {ex.Message}");
         }
+    }
+
+    private static ActionExecutionOutcome ExecuteContinueGame()
+    {
+        SceneTree tree = (SceneTree)Engine.GetMainLoop();
+        NMainMenu? mainMenu = GodotNodeSearch.FindFirst<NMainMenu>(tree.Root);
+        if (mainMenu?.IsVisibleInTree() != true)
+        {
+            return ActionExecutionOutcome.Fail("Main menu is not visible.");
+        }
+
+        if (mainMenu.ContinueRunInfo?.HasResult != true)
+        {
+            return ActionExecutionOutcome.Fail("No resumable run is available from the main menu.");
+        }
+
+        NMainMenuContinueButton? continueButton = GodotNodeSearch.FindFirst<NMainMenuContinueButton>(mainMenu);
+        if (continueButton is not { IsEnabled: true } || !continueButton.IsVisibleInTree())
+        {
+            mainMenu.RefreshButtons();
+            continueButton = GodotNodeSearch.FindFirst<NMainMenuContinueButton>(mainMenu);
+        }
+
+        if (continueButton is not { IsEnabled: true } || !continueButton.IsVisibleInTree())
+        {
+            return ActionExecutionOutcome.Fail("Continue button is not ready on the main menu.");
+        }
+
+        continueButton.ForceClick();
+        return ActionExecutionOutcome.Ok("Requested continue game from the main menu.");
     }
 
     private static ActionExecutionOutcome ExecutePlayCard(Player player, IReadOnlyDictionary<string, JsonElement> parameters)

@@ -16,6 +16,7 @@ internal static class ActionSurfaceBuilder
 
         return snapshot.Context.StateType switch
         {
+            "menu" => BuildMenuActions(snapshot),
             "monster" or "elite" or "boss" => BuildCombatActions(snapshot),
             "map" => BuildMapActions(snapshot),
             "event" => BuildEventActions(snapshot),
@@ -31,6 +32,32 @@ internal static class ActionSurfaceBuilder
             "treasure" => BuildTreasureActions(snapshot),
             _ => new ActionSurfaceSnapshot(snapshot.Context.StateType, snapshot.CompactObservation.Goal, Array.Empty<SceneActionSnapshot>())
         };
+    }
+
+    private static ActionSurfaceSnapshot BuildMenuActions(GameSnapshot snapshot)
+    {
+        if (snapshot.Menu?.CanContinue == true)
+        {
+            return new ActionSurfaceSnapshot(
+                snapshot.Context.StateType,
+                "Resume the saved run before querying deeper run state.",
+                [
+                    new SceneActionSnapshot(
+                        ActionType: "continue_game",
+                        Index: null,
+                        Label: snapshot.Menu.ContinueLabel ?? "Continue game",
+                        Description: "Resume the most recent saved run from the main menu.",
+                        IsAvailable: true,
+                        Parameters: Array.Empty<ActionArgumentSnapshot>(),
+                        TargetOptions: Array.Empty<string>(),
+                        Tags: ["menu", "resume"])
+                ]);
+        }
+
+        return new ActionSurfaceSnapshot(
+            snapshot.Context.StateType,
+            "No resumable run is currently available from the main menu.",
+            Array.Empty<SceneActionSnapshot>());
     }
 
     private static ActionSurfaceSnapshot BuildCombatActions(GameSnapshot snapshot)

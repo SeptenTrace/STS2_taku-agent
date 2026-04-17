@@ -171,6 +171,7 @@ internal static class ObservationServer
                     endpoints = new[]
                     {
                         "/api/v1/context",
+                        "/api/v1/menu",
                         "/api/v1/observation/compact",
                         "/api/v1/observation/delta",
                         "/api/v1/actions/execute",
@@ -209,6 +210,9 @@ internal static class ObservationServer
             {
                 case "/api/v1/context":
                     SendJson(response, snapshot.Context);
+                    return;
+                case "/api/v1/menu":
+                    RequireSection(response, snapshot.Menu, "Main menu state is unavailable.");
                     return;
                 case "/api/v1/observation/compact":
                     SendJson(response, snapshot.CompactObservation);

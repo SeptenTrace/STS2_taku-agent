@@ -335,3 +335,50 @@ test("waitForCondition supports stable combat stateType waits", async () => {
   assert.equal(result.context.stateType, "monster");
   assert.equal(result.combat?.roomType, "monster");
 });
+
+test("waitForCondition supports stable resumed-run waits after continue_game", async () => {
+  const client = new MockClient({
+    "/api/v1/context": [
+      {
+        stateType: "menu",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      }
+    ],
+    "/api/v1/actions": [
+      {
+        stateType: "menu",
+        actions: [
+          { actionType: "continue_game", label: "Continue game" }
+        ]
+      },
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Monster" }
+        ]
+      },
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Monster" }
+        ]
+      }
+    ]
+  });
+
+  const result = await waitForCondition(client, "run_active", 1);
+  assert.equal(result.context.stateType, "map");
+});

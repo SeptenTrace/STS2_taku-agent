@@ -3,6 +3,7 @@ export const usage = `Usage:
   ./sts ping
   ./sts capabilities
   ./sts context
+  ./sts menu
   ./sts next
   ./sts compact
   ./sts delta
@@ -26,6 +27,7 @@ export const usage = `Usage:
   ./sts treasure
   ./sts overlay
   ./sts wait CONDITION [TIMEOUT_SECONDS]
+  ./sts wait run-active [TIMEOUT_SECONDS]
   ./sts wait player-ready [TIMEOUT_SECONDS]
   ./sts room summary
   ./sts exec ACTION [INDEX] [TARGET]
@@ -40,6 +42,7 @@ Environment:
 Examples:
   ./sts ping
   ./sts next
+  ./sts menu
   ./sts actions
   ./sts combat actions
   ./sts player summary
@@ -49,6 +52,7 @@ Examples:
   ./sts relic-selection
   ./sts crystal-sphere
   ./sts wait player_turn
+  ./sts wait run-active
   ./sts wait player-ready
   ./sts wait rewards 10
   ./sts rewards claim-all-safe
@@ -56,5 +60,6 @@ Examples:
   ./sts exec select_card 1
   ./sts exec end_turn
   ./sts exec proceed --wait-for map
+  ./sts exec continue_game --wait-for run_active --timeout 30
   ./sts exec end_turn --wait-for player_turn --timeout 10
   ./sts get /api/v1/state/full`;

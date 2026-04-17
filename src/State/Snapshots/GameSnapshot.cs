@@ -3,6 +3,7 @@ namespace TakuAgentMod.State.Snapshots;
 internal sealed record GameSnapshot(
     DateTimeOffset Timestamp,
     ContextSnapshot Context,
+    MenuStateSnapshot? Menu,
     RunSnapshot? Run,
     PlayerStateSnapshot? Player,
     CompactObservationSnapshot CompactObservation,
@@ -28,6 +29,12 @@ internal sealed record ContextSnapshot(
     bool IsStable,
     bool IsTransitioning,
     IReadOnlyList<string> RecommendedQueries);
+
+internal sealed record MenuStateSnapshot(
+    bool IsVisible,
+    bool HasContinueRun,
+    bool CanContinue,
+    string? ContinueLabel);
 
 internal sealed record RunSnapshot(
     int Act,
