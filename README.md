@@ -5,6 +5,7 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 ## Planning Docs
 - `docs/overall-plan.md`: project roadmap across the three major phases
 - `docs/phase-1-observer.md`: detailed plan for building the game-state observation layer
+- `docs/phase-1-api.md`: low-token API design for phase 1 observation
 - `docs/feasibility/README.md`: feasibility assessment for the three planned phases
 
 ## Repository Layout
@@ -16,6 +17,8 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 
 ## Current Phase 1 Status
 The repository now includes a working battle-state capture pipeline for in-combat observation.
+
+It also now exposes a local read-only observation server designed for low-token LLM access.
 
 Currently verified fields:
 - Player role / character type
@@ -37,6 +40,14 @@ Snapshot output path on macOS:
 
 Action history output:
 - `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/action-history.jsonl`
+
+Observation server:
+- `http://localhost:15527/`
+- `http://localhost:15527/api/v1/capabilities`
+- `http://localhost:15527/api/v1/context`
+- `http://localhost:15527/api/v1/observation/compact`
+
+The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
 
 ## Build For Local macOS Game
 ```bash

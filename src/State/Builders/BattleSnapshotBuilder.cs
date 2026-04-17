@@ -174,7 +174,6 @@ internal sealed class BattleSnapshotBuilder
     {
         string title = ToReadableText(relic.Title) ?? relic.GetType().Name;
         string description = ToReadableText(relic.DynamicDescription)
-            ?? ToReadableText(relic.Description)
             ?? string.Empty;
 
         return new RelicSnapshot(
@@ -189,8 +188,6 @@ internal sealed class BattleSnapshotBuilder
     {
         string title = ToReadableText(potion.Title) ?? potion.GetType().Name;
         string description = ToReadableText(potion.DynamicDescription)
-            ?? ToReadableText(potion.Description)
-            ?? ToReadableText(potion.StaticDescription)
             ?? string.Empty;
 
         return new PotionSnapshot(

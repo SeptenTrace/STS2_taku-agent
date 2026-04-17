@@ -3,6 +3,7 @@ using System.IO;
 using HarmonyLib;
 using MegaCrit.Sts2.Core.Modding;
 using TakuAgentMod.Diagnostics;
+using TakuAgentMod.Observation;
 
 namespace TakuAgentMod;
 
@@ -26,9 +27,10 @@ public static class ModEntry
         {
             _harmony ??= new Harmony("io.retr0.sts2.taku_agent");
             _harmony.PatchAll(typeof(ModEntry).Assembly);
+            ObservationServer.Start();
 
             WriteBootstrapMarker("Harmony patching completed.");
-            BattleStateCaptureService.Log("Taku Agent initialized. Battle state capture service is active.");
+            BattleStateCaptureService.Log("Taku Agent initialized. Battle state capture service and observation server are active.");
         }
         catch (Exception ex)
         {
