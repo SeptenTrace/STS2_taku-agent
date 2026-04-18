@@ -13,7 +13,10 @@ export class HttpClient implements RequestClient {
     const method = options.method ?? "GET";
     const response = await fetch(`${this.baseUrl}${path}`, {
       method,
-      headers: options.body ? { "Content-Type": "application/json" } : undefined,
+      headers: {
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers ?? {})
+      },
       body: options.body ? JSON.stringify(options.body) : undefined
     });
 

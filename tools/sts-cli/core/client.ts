@@ -5,4 +5,5 @@ export interface RequestClient {
 export interface RequestOptions {
   method?: "GET" | "POST";
   body?: Record<string, unknown>;
+  headers?: Record<string, string>;
 }

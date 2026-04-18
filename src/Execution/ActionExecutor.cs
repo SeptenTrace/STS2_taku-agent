@@ -92,6 +92,7 @@ internal static class ActionExecutor
                 "crystal_sphere_set_tool" => ExecuteCrystalSphereSetTool(parameters),
                 "crystal_sphere_click_cell" => ExecuteCrystalSphereClickCell(parameters),
                 "crystal_sphere_proceed" => ExecuteCrystalSphereProceed(),
+                "open_treasure" => ExecuteOpenTreasure(),
                 "claim_treasure_relic" => ExecuteClaimTreasureRelic(parameters),
                 _ => ActionExecutionOutcome.Fail($"Unknown action type '{actionType}'.")
             };
@@ -172,10 +173,30 @@ internal static class ActionExecutor
         }
 
         CardModel card = hand.Cards[cardIndex];
+        string cardTitle = ObservationText.SafeGetText(() => card.Title) ?? card.Id.Entry;
+        string cardCost = BuildCardCostDisplay(card);
+        string? expectedCardId = GetOptionalString(parameters, "expected_card_id", "expected_id");
+        if (!string.IsNullOrWhiteSpace(expectedCardId) && !string.Equals(expectedCardId, card.Id.Entry, StringComparison.OrdinalIgnoreCase))
+        {
+            return ActionExecutionOutcome.Fail($"Card at index {cardIndex} changed: expected id '{expectedCardId}', found '{card.Id.Entry}'. Re-read the hand before retrying.");
+        }
+
+        string? expectedTitle = GetOptionalString(parameters, "expected_title");
+        if (!string.IsNullOrWhiteSpace(expectedTitle) && !string.Equals(expectedTitle, cardTitle, StringComparison.OrdinalIgnoreCase))
+        {
+            return ActionExecutionOutcome.Fail($"Card at index {cardIndex} changed: expected title '{expectedTitle}', found '{cardTitle}'. Re-read the hand before retrying.");
+        }
+
+        string? expectedCost = GetOptionalString(parameters, "expected_cost");
+        if (!string.IsNullOrWhiteSpace(expectedCost) && !string.Equals(expectedCost, cardCost, StringComparison.OrdinalIgnoreCase))
+        {
+            return ActionExecutionOutcome.Fail($"Card at index {cardIndex} changed: expected cost '{expectedCost}', found '{cardCost}'. Re-read the hand before retrying.");
+        }
+
         card.CanPlay(out var reason, out _);
         if (reason != UnplayableReason.None)
         {
-            return ActionExecutionOutcome.Fail($"Card '{ObservationText.SafeGetText(() => card.Title) ?? card.Id.Entry}' cannot be played: {reason}.");
+            return ActionExecutionOutcome.Fail($"Card '{cardTitle}' cannot be played: {reason}.");
         }
 
         Creature? target = null;
@@ -202,7 +223,6 @@ internal static class ActionExecutor
 
         RunManager.Instance.ActionQueueSynchronizer.RequestEnqueue(new PlayCardAction(card, target));
 
-        string cardTitle = ObservationText.SafeGetText(() => card.Title) ?? card.Id.Entry;
         string message = target is null
             ? $"Queued play_card for '{cardTitle}'."
             : $"Queued play_card for '{cardTitle}' targeting '{ObservationText.SafeGetText(() => target.Monster?.Title) ?? targetIdOrFallback(target)}'.";
@@ -1055,6 +1075,24 @@ internal static class ActionExecutor
         return ActionExecutionOutcome.Ok($"Claimed treasure relic '{title}'.");
     }
 
+    private static ActionExecutionOutcome ExecuteOpenTreasure()
+    {
+        NTreasureRoom? treasureRoom = GodotNodeSearch.FindFirst<NTreasureRoom>(((SceneTree)Engine.GetMainLoop()).Root);
+        if (treasureRoom is null)
+        {
+            return ActionExecutionOutcome.Fail("Treasure room is not open.");
+        }
+
+        NClickableControl? chestButton = treasureRoom.GetNodeOrNull<NClickableControl>("Chest");
+        if (chestButton is not { IsEnabled: true, Visible: true })
+        {
+            return ActionExecutionOutcome.Fail("Treasure chest is not ready to be opened.");
+        }
+
+        chestButton.ForceClick();
+        return ActionExecutionOutcome.Ok("Opened treasure chest.");
+    }
+
     private static Creature? ResolvePotionTarget(Player player, IReadOnlyDictionary<string, JsonElement> parameters)
     {
         string? targetId = GetOptionalString(parameters, "target", "entity_id");
@@ -1128,6 +1166,11 @@ internal static class ActionExecutor
             RelicReward => "Relic reward",
             _ => reward.GetType().Name
         };
+    }
+
+    private static string BuildCardCostDisplay(CardModel card)
+    {
+        return card.EnergyCost.CostsX ? "X" : card.EnergyCost.GetAmountToSpend().ToString();
     }
 
     private static int GetRequiredInt(IReadOnlyDictionary<string, JsonElement> parameters, params string[] names)

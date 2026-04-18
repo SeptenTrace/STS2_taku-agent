@@ -22,11 +22,12 @@ import type { RequestClient } from "../core/client.ts";
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
 import { CliError } from "../core/errors.ts";
 import { StreamOutput, type Output } from "../core/output.ts";
-import { buildRoomSummary, claimAllSafeRewards } from "./combo.ts";
+import { buildCombatSnapshot, buildRoomSnapshot, buildRoomSummary, claimAllSafeRewards, type RoomSnapshotDetail } from "./combo.ts";
 import { runDoctor } from "./doctor.ts";
 import { buildExecInvocation } from "./exec.ts";
 import { buildWaitInvocation, waitForCondition } from "./wait.ts";
 import { usage } from "../usage.ts";
+import { randomUUID } from "node:crypto";
 
 const knowledgePaths: Record<string, string> = {
   current: "/api/v1/knowledge/current",
@@ -73,6 +74,31 @@ async function commandFromMap(client: RequestClient, output: Output, section: st
   }
 
   await printRequest(client, output, path);
+}
+
+function parseRoomSnapshotDetail(args: string[]): RoomSnapshotDetail {
+  for (let index = 0; index < args.length; index++) {
+    const arg = args[index]!;
+    if (arg === "--detail") {
+      const detail = args[index + 1];
+      if (detail === "full" || detail === "standard") {
+        return detail;
+      }
+
+      throw new CliError("Usage: sts room snapshot [--detail standard|full]");
+    }
+
+    if (arg.startsWith("--detail=")) {
+      const detail = arg.slice("--detail=".length);
+      if (detail === "full" || detail === "standard") {
+        return detail;
+      }
+
+      throw new CliError("Usage: sts room snapshot [--detail standard|full]");
+    }
+  }
+
+  return "standard";
 }
 
 export async function dispatch(
@@ -128,6 +154,11 @@ export async function dispatch(
       await commandFromMap(client, output, args[0], playerPaths, "player");
       return;
     case "combat":
+      if ((args[0] ?? "").toLowerCase() === "snapshot") {
+        output.printJson(await buildCombatSnapshot(client));
+        return;
+      }
+
       await commandFromMap(client, output, args[0], combatPaths, "combat");
       return;
     case "map":
@@ -187,22 +218,33 @@ export async function dispatch(
       return;
     }
     case "room": {
-      const subcommand = args[0] ?? "summary";
+      const subcommand = (args[0] ?? "summary").toLowerCase();
+      if (subcommand === "summary") {
+        output.printJson(await buildRoomSummary(client));
+        return;
+      }
+
+      if (subcommand === "snapshot") {
+        output.printJson(await buildRoomSnapshot(client, parseRoomSnapshotDetail(args.slice(1))));
+        return;
+      }
+
       if (subcommand !== "summary") {
         throw new CliError(`Unknown room subcommand: ${subcommand}`);
       }
-
-      output.printJson(await buildRoomSummary(client));
-      return;
     }
     case "exec":
     case "do":
     case "act": {
       const action = args[0] ?? "";
       const invocation = buildExecInvocation(action, args.slice(1));
+      const correlationId = randomUUID();
       const execution = await client.request<ActionExecutionResponse>("/api/v1/actions/execute", {
         method: "POST",
-        body: invocation.payload
+        body: invocation.payload,
+        headers: {
+          "X-Sts-Correlation-Id": correlationId
+        }
       });
 
       if (invocation.waitFor && execution.status === "ok") {

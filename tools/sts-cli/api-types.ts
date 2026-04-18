@@ -77,6 +77,7 @@ export interface ActionSurfaceResponse {
 
 export interface ActionExecutionResponse {
   status: string;
+  correlationId?: string;
   actionType: string;
   message: string;
   context?: ContextResponse;
@@ -132,6 +133,80 @@ export interface CombatSummaryResponse {
   potionActions: number;
   actionCount: number;
   piles: CombatPilesSummary;
+}
+
+export interface CombatActionSemanticEffectResponse {
+  kind: string;
+  amount?: number;
+  target: string;
+  detail?: string;
+}
+
+export interface CombatActionSemanticResponse {
+  summary: string;
+  targetType: string;
+  energyCost?: number;
+  starCost?: number;
+  isXCost: boolean;
+  damage: number;
+  block: number;
+  draw: number;
+  energyGain: number;
+  heal: number;
+  effects: CombatActionSemanticEffectResponse[];
+  tags: string[];
+}
+
+export interface CombatActionResponse {
+  actionType: string;
+  cardIndex?: number;
+  potionSlot?: number;
+  sourceId?: string;
+  sourceTitle?: string;
+  sourceDescription?: string;
+  targetType?: string;
+  requiresTarget: boolean;
+  targetOptions: string[];
+  energyCost?: number;
+  starCost?: number;
+  isXCost: boolean;
+  tags: string[];
+  semantic?: CombatActionSemanticResponse;
+}
+
+export interface CombatHandCardResponse {
+  index: number;
+  id: string;
+  title: string;
+  description: string;
+  type: string;
+  rarity: string;
+  targetType: string;
+  cost: string;
+  starCost?: string;
+  canPlay: boolean;
+  isUpgraded: boolean;
+  legalTargets: string[];
+}
+
+export interface EnemyIntentResponse {
+  type: string;
+  label?: string;
+  description?: string;
+  isAttack: boolean;
+  expectedValue?: number;
+}
+
+export interface EnemyStateResponse {
+  entityId: string;
+  title: string;
+  currentHp: number;
+  maxHp: number;
+  block: number;
+  isAlive: boolean;
+  status: PlayerStatusEntry[];
+  intents: EnemyIntentResponse[];
+  incomingDamage?: number;
 }
 
 export interface RewardItem {
@@ -220,6 +295,7 @@ export interface TreasureChoiceResponse {
 
 export interface TreasureResponse {
   message?: string;
+  canOpenChest?: boolean;
   canProceed: boolean;
   relics: TreasureChoiceResponse[];
 }

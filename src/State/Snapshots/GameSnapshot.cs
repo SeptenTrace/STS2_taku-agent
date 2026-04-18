@@ -309,6 +309,7 @@ internal sealed record RestOptionEntrySnapshot(
 
 internal sealed record TreasureStateSnapshot(
     string? Message,
+    bool CanOpenChest,
     bool CanProceed,
     IReadOnlyList<RelicChoiceEntrySnapshot> Relics);
 

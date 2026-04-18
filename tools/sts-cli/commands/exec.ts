@@ -15,7 +15,8 @@ const DEFAULT_WAIT_CONDITIONS: Readonly<Record<string, string>> = {
   choose_map_node: "room_ready",
   proceed: "room_ready",
   skip_card_reward: "room_ready",
-  crystal_sphere_proceed: "room_ready"
+  crystal_sphere_proceed: "room_ready",
+  open_treasure: "treasure"
 };
 
 export function buildExecPayload(action: string, args: string[]): JsonObject {

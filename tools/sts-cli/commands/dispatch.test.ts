@@ -231,6 +231,165 @@ test("dispatch room summary handles menu without querying player summary", async
   assert.equal((output.jsonValues[0] as { playerSummary?: unknown }).playerSummary, undefined);
 });
 
+test("dispatch combat snapshot aggregates combat reads into one payload", async () => {
+  const client = new MockClient({
+    "/api/v1/context": {
+      stateType: "monster",
+      roomType: "Monster",
+      isStable: true,
+      isTransitioning: false
+    },
+    "/api/v1/player/summary": {
+      characterId: "IRONCLAD",
+      character: "铁甲战士",
+      currentHp: 68,
+      maxHp: 87,
+      block: 0,
+      gold: 152,
+      deckCount: 15,
+      uniqueCards: 8,
+      upgradedCards: 1,
+      relicIds: ["BURNING_BLOOD"],
+      potionIds: [],
+      status: [],
+      energy: 3,
+      maxEnergy: 3
+    },
+    "/api/v1/actions": {
+      stateType: "monster",
+      actions: [
+        { actionType: "play_card", index: 0, label: "Strike" }
+      ]
+    },
+    "/api/v1/combat/summary": {
+      roomType: "monster",
+      round: 2,
+      side: "player",
+      handCount: 5,
+      enemyCount: 1,
+      incomingDamage: 8,
+      playableCards: 4,
+      potionActions: 0,
+      actionCount: 6,
+      piles: {
+        draw: 10,
+        discard: 4,
+        exhaust: 0
+      }
+    },
+    "/api/v1/combat/actions": [
+      {
+        actionType: "play_card",
+        cardIndex: 0,
+        sourceId: "STRIKE",
+        sourceTitle: "Strike",
+        requiresTarget: true,
+        targetOptions: ["jaw_worm_0"],
+        isXCost: false,
+        tags: ["attack"]
+      }
+    ],
+    "/api/v1/combat/hand": [
+      {
+        index: 0,
+        id: "STRIKE",
+        title: "Strike",
+        description: "Deal 6 damage.",
+        type: "Attack",
+        rarity: "Basic",
+        targetType: "AnyEnemy",
+        cost: "1",
+        canPlay: true,
+        isUpgraded: false,
+        legalTargets: ["jaw_worm_0"]
+      }
+    ],
+    "/api/v1/combat/enemies": [
+      {
+        entityId: "jaw_worm_0",
+        title: "Jaw Worm",
+        currentHp: 40,
+        maxHp: 40,
+        block: 0,
+        isAlive: true,
+        status: [],
+        intents: [],
+        incomingDamage: 8
+      }
+    ]
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "combat", ["snapshot"], output);
+
+  assert.equal((output.jsonValues[0] as { combatSummary: { handCount: number } }).combatSummary.handCount, 5);
+  assert.deepEqual(client.requests.map((entry) => entry.path), [
+    "/api/v1/context",
+    "/api/v1/player/summary",
+    "/api/v1/actions",
+    "/api/v1/combat/summary",
+    "/api/v1/combat/actions",
+    "/api/v1/combat/hand",
+    "/api/v1/combat/enemies"
+  ]);
+});
+
+test("dispatch room snapshot supports full detail reads", async () => {
+  const client = new MockClient({
+    "/api/v1/context": {
+      stateType: "shop",
+      roomType: "Merchant",
+      isStable: true,
+      isTransitioning: false
+    },
+    "/api/v1/player/summary": {
+      characterId: "IRONCLAD",
+      character: "铁甲战士",
+      currentHp: 70,
+      maxHp: 80,
+      block: 0,
+      gold: 120,
+      deckCount: 14,
+      uniqueCards: 7,
+      upgradedCards: 2,
+      relicIds: ["BURNING_BLOOD"],
+      potionIds: [],
+      status: []
+    },
+    "/api/v1/actions": {
+      stateType: "shop",
+      actions: [
+        { actionType: "shop_purchase", index: 0, label: "Relic" }
+      ]
+    },
+    "/api/v1/shop": {
+      canProceed: true,
+      items: []
+    },
+    "/api/v1/observation/compact": {
+      stateType: "shop",
+      goal: "Evaluate affordable purchases."
+    },
+    "/api/v1/run": {
+      act: 1,
+      floor: 12
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "room", ["snapshot", "--detail", "full"], output);
+
+  assert.equal((output.jsonValues[0] as { compactObservation: { stateType: string } }).compactObservation.stateType, "shop");
+  assert.deepEqual(client.requests.map((entry) => entry.path), [
+    "/api/v1/context",
+    "/api/v1/actions",
+    "/api/v1/player/summary",
+    "/api/v1/shop",
+    "/api/v1/observation/compact",
+    "/api/v1/run"
+  ]);
+});
+
 test("dispatch bundle-selection uses the typed bundle endpoint", async () => {
   const client = new MockClient({
     "/api/v1/bundle-selection": {

@@ -225,6 +225,12 @@ Transition handling:
 - `/api/v1/actions` is intentionally empty during known transient states so agents do not fire against half-settled UI
 - when `stateType=menu`, `/api/v1/menu` tells you whether `/api/v1/actions` should expose `continue_game`
 
+Treasure handling:
+- unopened treasure rooms now report `stateType=treasure` with `isStable=true`
+- `/api/v1/treasure` exposes `canOpenChest=true` before relics are visible
+- `/api/v1/actions` exposes `open_treasure`, so `wait room-ready` no longer waits forever on closed chests
+- after `open_treasure`, the default CLI wait target is `treasure`, which lets the relic-selection surface settle before the next read
+
 Current low-token combat flow:
 - `context` -> current scene classification
 - `compact observation` -> minimal decision facts
@@ -240,6 +246,19 @@ Recommended execution flow:
 - `exec ...` -> execute and use the built-in default wait when one exists, or pass `--wait-for ...` explicitly when you need a different follow-up state
 - `delta observation` or `room summary` -> inspect the new stable state
 - if a restart lands on the main menu, `exec continue_game` already defaults to waiting for `run_active`
+
+CLI aggregation guidance:
+- the current fine-grained endpoints are useful as low-level building blocks, but combat reads are still too fragmented for practical agent play
+- `./sts combat snapshot` now combines `context`, `player summary`, `actions`, `combat summary`, `combat/actions`, `combat/hand`, and `combat/enemies`
+- `./sts room snapshot --detail full` combines `room summary` with `compact observation`, `run`, and an embedded combat snapshot when the current room is combat
+- deterministic room-flow actions are good candidates for higher-level helpers, but combat multi-play helpers are not safe if they only replay stale card indexes
+- before adding scripted multi-card combat commands, the executor should either re-read the action surface between steps or use a stable per-card hand identity
+
+Replay-friendly logging guidance:
+- the server now emits structured action execution logs to `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/action-execution.jsonl`
+- each action log record includes timestamp, correlation id, run/floor/room context, player resources before/after, action parameters, action-surface summaries, delta facts, failure reason, and debug snapshot path
+- `sts exec ...` automatically sends a correlation id header so failed or successful writes can be traced in the server log
+- verbose `wait` traces are still the preferred tool for transition debugging and helper-flow diagnosis
 
 The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
 
@@ -279,6 +298,7 @@ Current implemented Phase 2 surface:
 - `crystal_sphere_set_tool`
 - `crystal_sphere_click_cell`
 - `crystal_sphere_proceed`
+- `open_treasure`
 - `claim_treasure_relic`
 
 Validated in live play:
@@ -296,6 +316,10 @@ Canonical execution contract:
 - combat target selection uses `target`
 - every indexed action now accepts the same canonical `index`
 - legacy aliases like `card_index`, `slot`, `reward_index`, and `relic_index` are still accepted for compatibility
+- combat card `index` values are only safe for the current action surface snapshot; after any card is played, agents should treat previous indexes as stale
+- in practice, combat agents should re-read `actions` or `combat hand` after each played card instead of queueing multiple plays from one stale snapshot
+- `play_card` now also accepts optional guards such as `expected_card_id`, `expected_title`, and `expected_cost`; when they do not match the current hand slot, execution fails instead of misplaying a stale index
+- a safer long-term contract would still expose a stable per-card hand instance id
 
 See `docs/phase-2-todo.md` for the concrete task list.
 

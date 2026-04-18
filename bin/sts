@@ -13,8 +13,13 @@ while [[ -L "$SOURCE" ]]; do
 done
 
 ROOT_DIR="$(cd "$(dirname "$SOURCE")/.." && pwd)"
+if [[ -f "${ROOT_DIR}/tools/sts-cli/main.ts" ]]; then
+  exec node --experimental-strip-types "${ROOT_DIR}/tools/sts-cli/main.ts" "$@"
+fi
+
 if [[ -f "${ROOT_DIR}/dist/npm/main.js" ]]; then
   exec node "${ROOT_DIR}/dist/npm/main.js" "$@"
 fi
 
-exec node --experimental-strip-types "${ROOT_DIR}/tools/sts-cli/main.ts" "$@"
+echo "Could not locate sts CLI entrypoint under ${ROOT_DIR}" >&2
+exit 1

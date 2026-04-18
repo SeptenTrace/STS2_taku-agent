@@ -398,6 +398,19 @@ internal static class ActionSurfaceBuilder
 
         if (snapshot.Treasure is not null)
         {
+            if (snapshot.Treasure.CanOpenChest)
+            {
+                actions.Add(new SceneActionSnapshot(
+                    ActionType: "open_treasure",
+                    Index: null,
+                    Label: "Open treasure chest",
+                    Description: snapshot.Treasure.Message ?? "Reveal the relic choices in the treasure chest.",
+                    IsAvailable: true,
+                    Parameters: Array.Empty<ActionArgumentSnapshot>(),
+                    TargetOptions: Array.Empty<string>(),
+                    Tags: ["treasure", "open"]));
+            }
+
             foreach (RelicChoiceEntrySnapshot relic in snapshot.Treasure.Relics)
             {
                 actions.Add(new SceneActionSnapshot(
@@ -427,7 +440,11 @@ internal static class ActionSurfaceBuilder
 
         AppendOutOfCombatPotionActions(actions, snapshot.Player);
 
-        return new ActionSurfaceSnapshot(snapshot.Context.StateType, "Claim a treasure relic or proceed.", actions);
+        string goal = snapshot.Treasure?.CanOpenChest == true
+            ? "Open the treasure chest before choosing a relic."
+            : "Claim a treasure relic or proceed.";
+
+        return new ActionSurfaceSnapshot(snapshot.Context.StateType, goal, actions);
     }
 
     private static ActionSurfaceSnapshot BuildBundleSelectionActions(GameSnapshot snapshot)

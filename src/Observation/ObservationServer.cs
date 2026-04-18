@@ -367,8 +367,10 @@ internal static class ObservationServer
             return;
         }
 
+        string correlationId = request.Headers["X-Sts-Correlation-Id"] ?? Guid.NewGuid().ToString("n");
         GameSnapshot beforeSnapshot = RunOnMainThread(() => SnapshotBuilder.Build()).GetAwaiter().GetResult();
         string beforeSignature = BuildSnapshotSignature(beforeSnapshot);
+        ActionSurfaceSnapshot beforeActions = ActionSurfaceBuilder.Build(beforeSnapshot);
 
         ActionExecutionOutcome outcome = RunOnMainThread(() => ActionExecutor.Execute(actionType!, parameters)).GetAwaiter().GetResult();
         (GameSnapshot afterSnapshot, bool changed) = WaitForPostActionSnapshot(actionType!, beforeSignature, beforeSnapshot, outcome.Success);
@@ -382,14 +384,22 @@ internal static class ObservationServer
 
         ActionExecutionLogExporter.Append(new ActionExecutionLogEntry(
             Timestamp: DateTimeOffset.Now,
+            CorrelationId: correlationId,
             ActionType: actionType!,
             Parameters: SerializeParameters(parameters),
             Success: outcome.Success,
             Message: outcome.Message,
             ReasonCode: recovery.ReasonCode,
             Retryable: recovery.Retryable,
+            RunContext: BuildRunContextLog(afterSnapshot.Run),
+            PlayerBefore: BuildPlayerResourceLog(beforeSnapshot.Player),
+            PlayerAfter: BuildPlayerResourceLog(afterSnapshot.Player),
+            ActionSurfaceBefore: BuildActionSurfaceLog(beforeActions),
+            ActionSurfaceAfter: BuildActionSurfaceLog(currentActions),
             StateTypeBefore: beforeSnapshot.Context.StateType,
             StateTypeAfter: afterSnapshot.Context.StateType,
+            IsStableBefore: beforeSnapshot.Context.IsStable,
+            IsStableAfter: afterSnapshot.Context.IsStable,
             ObservationVersion: version,
             ObservationChanged: delta.Changed,
             ChangedSections: delta.ChangedSections,
@@ -400,6 +410,7 @@ internal static class ObservationServer
         SendJson(response, new
         {
             status = outcome.Success ? "ok" : "error",
+            correlationId,
             actionType,
             message = outcome.Message,
             context = afterSnapshot.Context,
@@ -680,6 +691,48 @@ internal static class ObservationServer
             Retryable: retryable,
             NextStep: nextStep,
             NextQueries: nextQueries);
+    }
+
+    private static RunContextLogSnapshot? BuildRunContextLog(RunSnapshot? run)
+    {
+        if (run is null)
+        {
+            return null;
+        }
+
+        return new RunContextLogSnapshot(
+            Act: run.Act,
+            Floor: run.Floor,
+            RoomType: run.RoomType,
+            MapCol: run.CurrentMapCoord?.Col,
+            MapRow: run.CurrentMapCoord?.Row);
+    }
+
+    private static PlayerResourceLogSnapshot? BuildPlayerResourceLog(PlayerStateSnapshot? player)
+    {
+        if (player is null)
+        {
+            return null;
+        }
+
+        return new PlayerResourceLogSnapshot(
+            CurrentHp: player.CurrentHp,
+            MaxHp: player.MaxHp,
+            Block: player.Block,
+            Gold: player.Gold,
+            Energy: player.Energy,
+            MaxEnergy: player.MaxEnergy,
+            Stars: player.Stars,
+            PotionCount: player.Potions.Count,
+            RelicCount: player.Relics.Count);
+    }
+
+    private static ActionSurfaceLogSummary BuildActionSurfaceLog(ActionSurfaceSnapshot actionSurface)
+    {
+        return new ActionSurfaceLogSummary(
+            StateType: actionSurface.StateType,
+            ActionCount: actionSurface.Actions.Count,
+            ActionTypes: actionSurface.Actions.Select(action => action.ActionType).ToArray());
     }
 
     private static string ClassifyFailureReason(string message)

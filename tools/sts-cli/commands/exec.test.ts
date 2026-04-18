@@ -104,6 +104,19 @@ test("buildExecInvocation infers a default wait target for proceed", () => {
   });
 });
 
+test("buildExecInvocation infers a default wait target for open_treasure", () => {
+  const invocation = buildExecInvocation("open_treasure", []);
+  assert.deepEqual(invocation, {
+    payload: {
+      actionType: "open_treasure",
+      parameters: {}
+    },
+    waitFor: "treasure",
+    timeoutSeconds: 15,
+    waitVerbose: false
+  });
+});
+
 test("buildExecInvocation rejects wait verbose without a wait target", () => {
   assert.throws(
     () => buildExecInvocation("shop_purchase", ["index=1", "--wait-verbose"]),

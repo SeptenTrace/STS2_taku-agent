@@ -291,6 +291,40 @@ test("waitForCondition requires primary actions for player_ready map states", as
   assert.equal(result.context.stateType, "map");
 });
 
+test("waitForCondition treats closed treasure chests as room_ready once open_treasure is exposed", async () => {
+  const client = new MockClient({
+    "/api/v1/context": [
+      {
+        stateType: "treasure",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "treasure",
+        isStable: true,
+        isTransitioning: false
+      }
+    ],
+    "/api/v1/actions": [
+      {
+        stateType: "treasure",
+        actions: [
+          { actionType: "open_treasure", label: "Open treasure chest" }
+        ]
+      },
+      {
+        stateType: "treasure",
+        actions: [
+          { actionType: "open_treasure", label: "Open treasure chest" }
+        ]
+      }
+    ]
+  });
+
+  const result = await waitForCondition(client, "room_ready", 1);
+  assert.equal(result.context.stateType, "treasure");
+});
+
 test("waitForCondition supports stable combat stateType waits", async () => {
   const client = new MockClient({
     "/api/v1/context": [

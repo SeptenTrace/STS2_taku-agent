@@ -11,7 +11,7 @@ export const usage = `Usage:
   sts run
   sts knowledge [current|cards|relics|potions|status]
   sts player [summary|deck|relics|potions|status]
-  sts combat [summary|actions|hand|enemies|piles]
+  sts combat [summary|actions|hand|enemies|piles|snapshot]
   sts map
   sts event
   sts fake-merchant
@@ -33,6 +33,7 @@ export const usage = `Usage:
   sts wait run-active [TIMEOUT_SECONDS]
   sts wait player-ready [TIMEOUT_SECONDS]
   sts room summary
+  sts room snapshot [--detail standard|full]
   sts exec ACTION [INDEX] [TARGET]
   sts exec ACTION [key=value ...]
   sts exec ACTION ... [--wait-for CONDITION] [--timeout SECONDS]
@@ -48,9 +49,11 @@ Examples:
   sts next
   sts menu
   sts actions
+  sts combat snapshot
   sts combat actions
   sts player summary
   sts room summary
+  sts room snapshot --detail full
   sts knowledge cards
   sts bundle-selection
   sts relic-selection
@@ -62,6 +65,7 @@ Examples:
   sts wait player-ready
   sts wait rewards 10
   sts rewards claim-all-safe
+  sts exec open_treasure
   sts exec play_card 0 jaw_worm_0
   sts exec select_card 1
   sts exec end_turn

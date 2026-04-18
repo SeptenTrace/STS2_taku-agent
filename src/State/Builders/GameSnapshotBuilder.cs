@@ -332,7 +332,7 @@ internal sealed class GameSnapshotBuilder
             "fake_merchant" => fakeMerchant is not null && (fakeMerchant.Items.Count > 0 || fakeMerchant.CanProceed || fakeMerchant.StartedFight),
             "shop" => shop is not null && (shop.Items.Count > 0 || shop.CanProceed),
             "rest_site" => restSite is not null && (restSite.Options.Count > 0 || restSite.CanProceed),
-            "treasure" => treasure is not null && (treasure.Relics.Count > 0 || treasure.CanProceed),
+            "treasure" => treasure is not null && (treasure.CanOpenChest || treasure.Relics.Count > 0 || treasure.CanProceed),
             "card_select" => cardSelection is not null && (cardSelection.Cards.Count > 0 || cardSelection.CanConfirm || cardSelection.CanCancel || cardSelection.CanSkip),
             "bundle_select" => bundleSelection is not null && (bundleSelection.Bundles.Count > 0 || bundleSelection.CanConfirm || bundleSelection.CanCancel),
             "relic_select" => relicSelection is not null && (relicSelection.Relics.Count > 0 || relicSelection.CanSkip),
@@ -1380,7 +1380,17 @@ internal sealed class GameSnapshotBuilder
         NTreasureRoom? treasureUi = GodotNodeSearch.FindFirst<NTreasureRoom>(((SceneTree)Engine.GetMainLoop()).Root);
         if (treasureUi is null)
         {
-            return new TreasureStateSnapshot("Treasure room loading...", false, Array.Empty<RelicChoiceEntrySnapshot>());
+            return new TreasureStateSnapshot("Treasure room loading...", false, false, Array.Empty<RelicChoiceEntrySnapshot>());
+        }
+
+        NClickableControl? chestButton = treasureUi.GetNodeOrNull<NClickableControl>("Chest");
+        if (chestButton is { IsEnabled: true, Visible: true })
+        {
+            return new TreasureStateSnapshot(
+                Message: "Chest is closed. Open it before choosing a relic.",
+                CanOpenChest: true,
+                CanProceed: false,
+                Relics: Array.Empty<RelicChoiceEntrySnapshot>());
         }
 
         var relics = new List<RelicChoiceEntrySnapshot>();
@@ -1407,7 +1417,10 @@ internal sealed class GameSnapshotBuilder
         }
 
         return new TreasureStateSnapshot(
-            Message: null,
+            Message: relics.Count == 0 && !(treasureUi.ProceedButton?.IsEnabled ?? false)
+                ? "Treasure room is open but relic choices are not visible yet."
+                : null,
+            CanOpenChest: false,
             CanProceed: treasureUi.ProceedButton?.IsEnabled ?? false,
             Relics: relics);
     }
@@ -1649,8 +1662,14 @@ internal sealed class GameSnapshotBuilder
                 }
                 break;
             case "treasure":
-                goal = "Pick a relic from the treasure screen.";
+                goal = treasure?.CanOpenChest == true
+                    ? "Open the treasure chest before choosing a relic."
+                    : "Pick a relic from the treasure screen.";
                 facts.Add($"Visible relic choices: {treasure?.Relics.Count ?? 0}.");
+                if (treasure?.CanOpenChest == true)
+                {
+                    facts.Add("Treasure chest is still closed and requires an explicit open action.");
+                }
                 break;
             case "overlay":
                 goal = "An unhandled overlay is active. Query context first and fall back to full state only if blocked.";

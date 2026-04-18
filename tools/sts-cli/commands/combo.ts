@@ -4,13 +4,17 @@ import type {
   BundleSelectionResponse,
   CardRewardResponse,
   CardSelectionResponse,
+  CombatActionResponse,
+  CombatHandCardResponse,
   CombatSummaryResponse,
   ContextResponse,
   CrystalSphereResponse,
+  EnemyStateResponse,
   EventResponse,
   FakeMerchantResponse,
   MapSummaryResponse,
   MenuResponse,
+  ObservationCompactResponse,
   OverlayResponse,
   PlayerSummaryResponse,
   RelicSelectionResponse,
@@ -56,6 +60,24 @@ export interface RoomSummaryResult {
   playerSummary?: PlayerSummaryResponse;
   actions: ActionSurfaceResponse;
   stateData?: RoomStateData;
+}
+
+export interface CombatSnapshotResult {
+  context: ContextResponse;
+  playerSummary: PlayerSummaryResponse;
+  actions: ActionSurfaceResponse;
+  combatSummary: CombatSummaryResponse;
+  combatActions: CombatActionResponse[];
+  hand: CombatHandCardResponse[];
+  enemies: EnemyStateResponse[];
+}
+
+export type RoomSnapshotDetail = "standard" | "full";
+
+export interface RoomSnapshotResult extends RoomSummaryResult {
+  compactObservation?: ObservationCompactResponse;
+  run?: unknown;
+  combat?: CombatSnapshotResult;
 }
 
 function isSafeReward(item: RewardsResponse["items"][number]): boolean {
@@ -225,4 +247,54 @@ export async function buildRoomSummary(client: RequestClient): Promise<RoomSumma
     actions,
     stateData: await readStateData(client, context)
   };
+}
+
+export async function buildCombatSnapshot(client: RequestClient): Promise<CombatSnapshotResult> {
+  const [context, playerSummary, actions, combatSummary, combatActions, hand, enemies] = await Promise.all([
+    client.request<ContextResponse>("/api/v1/context"),
+    client.request<PlayerSummaryResponse>("/api/v1/player/summary"),
+    client.request<ActionSurfaceResponse>("/api/v1/actions"),
+    client.request<CombatSummaryResponse>("/api/v1/combat/summary"),
+    client.request<CombatActionResponse[]>("/api/v1/combat/actions"),
+    client.request<CombatHandCardResponse[]>("/api/v1/combat/hand"),
+    client.request<EnemyStateResponse[]>("/api/v1/combat/enemies")
+  ]);
+
+  return {
+    context,
+    playerSummary,
+    actions,
+    combatSummary,
+    combatActions,
+    hand,
+    enemies
+  };
+}
+
+export async function buildRoomSnapshot(
+  client: RequestClient,
+  detail: RoomSnapshotDetail = "standard"
+): Promise<RoomSnapshotResult> {
+  const roomSummary = await buildRoomSummary(client);
+
+  const result: RoomSnapshotResult = {
+    ...roomSummary
+  };
+
+  if (detail === "full") {
+    const [compactObservation, run] = await Promise.all([
+      client.request<ObservationCompactResponse>("/api/v1/observation/compact"),
+      roomSummary.context.stateType === "menu"
+        ? Promise.resolve(undefined)
+        : client.request("/api/v1/run")
+    ]);
+    result.compactObservation = compactObservation;
+    result.run = run;
+  }
+
+  if (["monster", "elite", "boss"].includes(roomSummary.context.stateType)) {
+    result.combat = await buildCombatSnapshot(client);
+  }
+
+  return result;
 }

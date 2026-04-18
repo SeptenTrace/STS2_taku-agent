@@ -53,7 +53,7 @@ const READY_STATE_PRIMARY_ACTIONS: Readonly<Record<string, readonly string[]>> =
   bundle_select: ["select_bundle", "confirm_bundle_selection", "cancel_bundle_selection"],
   relic_select: ["select_relic", "skip_relic_selection"],
   crystal_sphere: ["crystal_sphere_set_tool", "crystal_sphere_click_cell", "crystal_sphere_proceed"],
-  treasure: ["claim_treasure_relic", "proceed"]
+  treasure: ["open_treasure", "claim_treasure_relic", "proceed"]
 };
 
 export function normalizeWaitCondition(condition: string): string {
