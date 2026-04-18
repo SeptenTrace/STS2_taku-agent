@@ -167,6 +167,7 @@ Local CLI:
 - `./sts exec continue_game`
 - `./sts wait run-active`
 - `./sts wait player-ready`
+- `./sts wait room-ready --verbose`
 - `./sts exec proceed --wait-for map`
 - `./sts get /api/v1/state/full`
 
@@ -183,8 +184,10 @@ Higher-level CLI helpers:
 - `./sts room summary` returns one combined snapshot for the current actionable room
 - `./sts menu` reports whether the main menu can currently resume the saved run
 - `./sts doctor` runs a lightweight end-to-end health check over ping, context, actions, and either `menu` or `room summary`
+- `./sts doctor` also checks whether the local game process is visible and whether TCP port `15527` is listening
 - `./sts wait ... --verbose` includes poll-by-poll trace data so timeout diagnosis does not rely on the final context alone
 - `./sts exec ... --wait-for-ready|--wait-for-room|--wait-for-run` exposes higher-level wait aliases for common follow-up states
+- `./sts exec` now infers built-in default waits for a few high-confidence transition actions such as `continue_game`, `end_turn`, `choose_map_node`, `proceed`, `skip_card_reward`, and `crystal_sphere_proceed`
 - `./sts wait run-active` waits for the game to leave the main menu and settle into a stable in-run state
 - `./sts wait player-ready` waits for a stable player-actionable state or player combat turn
 - `./sts wait rewards` / `./sts wait map` / `./sts wait monster` wait for a stable matching room state, not just a one-frame context match
@@ -215,9 +218,9 @@ Current low-token combat flow:
 Recommended execution flow:
 - `context` -> confirm `isStable=true`
 - `actions` -> pick one legal action
-- `exec ... --wait-for ...` -> execute and wait for the next stable state when a transition is expected
+- `exec ...` -> execute and use the built-in default wait when one exists, or pass `--wait-for ...` explicitly when you need a different follow-up state
 - `delta observation` or `room summary` -> inspect the new stable state
-- if a restart lands on the main menu, use `exec continue_game --wait-for run_active` before querying run-specific endpoints
+- if a restart lands on the main menu, `exec continue_game` already defaults to waiting for `run_active`
 
 The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
 

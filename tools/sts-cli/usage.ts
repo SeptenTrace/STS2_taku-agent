@@ -65,7 +65,9 @@ Examples:
   ./sts exec play_card 0 jaw_worm_0
   ./sts exec select_card 1
   ./sts exec end_turn
+  ./sts exec proceed
   ./sts exec proceed --wait-for map
+  ./sts exec end_turn --wait-verbose
   ./sts exec continue_game --wait-for-run --wait-verbose --timeout 30
   ./sts exec continue_game --wait-for run_active --timeout 30
   ./sts exec end_turn --wait-for player_turn --timeout 10

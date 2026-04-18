@@ -2,10 +2,15 @@ import type {
   ActionSurfaceResponse,
   ContextResponse,
   MenuResponse,
+  OverlayResponse,
   PingResponse
 } from "../api-types.ts";
 import type { RequestClient } from "../core/client.ts";
 import { buildRoomSummary, type RoomSummaryResult } from "./combo.ts";
+import { promisify } from "node:util";
+import { execFile as execFileCallback } from "node:child_process";
+
+const execFile = promisify(execFileCallback);
 
 export interface DoctorCheck {
   name: string;
@@ -19,10 +24,64 @@ export interface DoctorResult {
   checks: DoctorCheck[];
 }
 
-export async function runDoctor(client: RequestClient): Promise<DoctorResult> {
+export interface LocalInspector {
+  isGameProcessRunning(): Promise<boolean>;
+  isObserverPortListening(): Promise<boolean>;
+}
+
+export class ShellLocalInspector implements LocalInspector {
+  async isGameProcessRunning(): Promise<boolean> {
+    try {
+      await execFile("pgrep", ["-f", "Slay the Spire 2|SlayTheSpire2"]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async isObserverPortListening(): Promise<boolean> {
+    try {
+      const { stdout } = await execFile("lsof", ["-nP", "-iTCP:15527", "-sTCP:LISTEN"]);
+      return stdout.trim().length > 0;
+    } catch {
+      return false;
+    }
+  }
+}
+
+class StaticLocalInspector implements LocalInspector {
+  private readonly gameProcessRunning: boolean;
+  private readonly observerPortListening: boolean;
+
+  constructor(gameProcessRunning: boolean, observerPortListening: boolean) {
+    this.gameProcessRunning = gameProcessRunning;
+    this.observerPortListening = observerPortListening;
+  }
+
+  async isGameProcessRunning(): Promise<boolean> {
+    return this.gameProcessRunning;
+  }
+
+  async isObserverPortListening(): Promise<boolean> {
+    return this.observerPortListening;
+  }
+}
+
+function createDefaultInspector(): LocalInspector {
+  if (process.env.STS_CLI_TEST === "1") {
+    return new StaticLocalInspector(true, true);
+  }
+
+  return new ShellLocalInspector();
+}
+
+export async function runDoctor(client: RequestClient, inspector: LocalInspector = createDefaultInspector()): Promise<DoctorResult> {
   const checks: DoctorCheck[] = [];
   let context: ContextResponse | undefined;
   let actions: ActionSurfaceResponse | undefined;
+
+  checks.push(await runSystemCheck("game_process", () => inspector.isGameProcessRunning(), "Game process visible to the local shell."));
+  checks.push(await runSystemCheck("observer_port", () => inspector.isObserverPortListening(), "Observer TCP port 15527 is listening."));
 
   try {
     const ping = await client.request<PingResponse>("/");
@@ -92,6 +151,8 @@ export async function runDoctor(client: RequestClient): Promise<DoctorResult> {
 
   if (context?.stateType === "menu") {
     await addMenuDoctorChecks(client, checks, actions);
+  } else if (context?.stateType === "overlay") {
+    await addOverlayDoctorChecks(client, checks);
   } else if (context) {
     await addRoomDoctorChecks(client, checks);
   }
@@ -101,6 +162,26 @@ export async function runDoctor(client: RequestClient): Promise<DoctorResult> {
     context,
     checks
   };
+}
+
+async function runSystemCheck(name: string, fn: () => Promise<boolean>, description: string): Promise<DoctorCheck> {
+  try {
+    const ok = await fn();
+    return {
+      name,
+      ok,
+      detail: {
+        description,
+        ok
+      }
+    };
+  } catch (error) {
+    return {
+      name,
+      ok: false,
+      detail: formatErrorDetail(error)
+    };
+  }
 }
 
 async function addMenuDoctorChecks(client: RequestClient, checks: DoctorCheck[], actions: ActionSurfaceResponse | undefined): Promise<void> {
@@ -145,6 +226,27 @@ async function addRoomDoctorChecks(client: RequestClient, checks: DoctorCheck[])
   } catch (error) {
     checks.push({
       name: "room_summary",
+      ok: false,
+      detail: formatErrorDetail(error)
+    });
+  }
+}
+
+async function addOverlayDoctorChecks(client: RequestClient, checks: DoctorCheck[]): Promise<void> {
+  try {
+    const overlay = await client.request<OverlayResponse>("/api/v1/overlay");
+    checks.push({
+      name: "overlay",
+      ok: !overlay.manualInterventionRequired,
+      detail: {
+        screenType: overlay.screenType,
+        message: overlay.message,
+        manualInterventionRequired: overlay.manualInterventionRequired
+      }
+    });
+  } catch (error) {
+    checks.push({
+      name: "overlay",
       ok: false,
       detail: formatErrorDetail(error)
     });

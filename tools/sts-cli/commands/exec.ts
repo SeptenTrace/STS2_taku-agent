@@ -9,6 +9,15 @@ export interface ExecInvocation {
   waitVerbose: boolean;
 }
 
+const DEFAULT_WAIT_CONDITIONS: Readonly<Record<string, string>> = {
+  continue_game: "run_active",
+  end_turn: "player_turn",
+  choose_map_node: "room_ready",
+  proceed: "room_ready",
+  skip_card_reward: "room_ready",
+  crystal_sphere_proceed: "room_ready"
+};
+
 export function buildExecPayload(action: string, args: string[]): JsonObject {
   if (!action) {
     throw new CliError("Usage: ./sts exec ACTION [key=value ...]");
@@ -115,8 +124,12 @@ export function buildExecInvocation(action: string, args: string[]): ExecInvocat
     actionArgs.push(arg);
   }
 
+  if (!waitFor) {
+    waitFor = DEFAULT_WAIT_CONDITIONS[action];
+  }
+
   if (waitVerbose && !waitFor) {
-    throw new CliError("`--wait-verbose` requires a wait target such as `--wait-for`, `--wait-for-ready`, `--wait-for-room`, or `--wait-for-run`.");
+    throw new CliError("`--wait-verbose` requires a wait target such as `--wait-for`, `--wait-for-ready`, `--wait-for-room`, `--wait-for-run`, or an action with a built-in default wait.");
   }
 
   return {

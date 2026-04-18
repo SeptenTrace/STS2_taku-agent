@@ -344,3 +344,46 @@ test("dispatch exec can wait for a stable follow-up condition", async () => {
     }
   });
 });
+
+test("dispatch exec infers default wait targets for proceed", async () => {
+  const client = new MockClient({
+    "/api/v1/actions/execute": {
+      status: "ok",
+      actionType: "proceed",
+      message: "Proceeded from rewards."
+    },
+    "/api/v1/context": [
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      }
+    ],
+    "/api/v1/actions": [
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Unknown" }
+        ]
+      },
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Unknown" }
+        ]
+      }
+    ]
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "exec", ["proceed"], output);
+
+  assert.equal((output.jsonValues[0] as { wait: { condition: string } }).wait.condition, "room_ready");
+});

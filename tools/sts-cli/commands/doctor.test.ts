@@ -1,8 +1,26 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { runDoctor } from "./doctor.ts";
+import { runDoctor, type LocalInspector } from "./doctor.ts";
 import { MockClient } from "../test-helpers/mock-client.ts";
+
+class MockInspector implements LocalInspector {
+  private readonly gameProcessRunning: boolean;
+  private readonly observerPortListening: boolean;
+
+  constructor(gameProcessRunning: boolean, observerPortListening: boolean) {
+    this.gameProcessRunning = gameProcessRunning;
+    this.observerPortListening = observerPortListening;
+  }
+
+  async isGameProcessRunning(): Promise<boolean> {
+    return this.gameProcessRunning;
+  }
+
+  async isObserverPortListening(): Promise<boolean> {
+    return this.observerPortListening;
+  }
+}
 
 test("runDoctor validates menu continue exposure", async () => {
   const client = new MockClient({
@@ -31,8 +49,9 @@ test("runDoctor validates menu continue exposure", async () => {
     }
   });
 
-  const result = await runDoctor(client);
+  const result = await runDoctor(client, new MockInspector(true, true));
   assert.equal(result.ok, true);
+  assert.equal(result.checks.find((check) => check.name === "game_process")?.ok, true);
   assert.equal(result.checks.find((check) => check.name === "menu_continue_action")?.ok, true);
 });
 
@@ -92,7 +111,7 @@ test("runDoctor validates in-run room summary", async () => {
     }
   });
 
-  const result = await runDoctor(client);
+  const result = await runDoctor(client, new MockInspector(true, true));
   assert.equal(result.ok, true);
   assert.equal(result.checks.find((check) => check.name === "room_summary")?.ok, true);
 });

@@ -78,9 +78,35 @@ test("buildExecInvocation supports high-level wait aliases", () => {
   });
 });
 
+test("buildExecInvocation infers a default wait target for continue_game", () => {
+  const invocation = buildExecInvocation("continue_game", []);
+  assert.deepEqual(invocation, {
+    payload: {
+      actionType: "continue_game",
+      parameters: {}
+    },
+    waitFor: "run_active",
+    timeoutSeconds: 15,
+    waitVerbose: false
+  });
+});
+
+test("buildExecInvocation infers a default wait target for proceed", () => {
+  const invocation = buildExecInvocation("proceed", []);
+  assert.deepEqual(invocation, {
+    payload: {
+      actionType: "proceed",
+      parameters: {}
+    },
+    waitFor: "room_ready",
+    timeoutSeconds: 15,
+    waitVerbose: false
+  });
+});
+
 test("buildExecInvocation rejects wait verbose without a wait target", () => {
   assert.throws(
-    () => buildExecInvocation("end_turn", ["--wait-verbose"]),
+    () => buildExecInvocation("shop_purchase", ["index=1", "--wait-verbose"]),
     (error) => error instanceof CliError && error.message.includes("--wait-verbose")
   );
 });

@@ -8,7 +8,7 @@
   "scripts": {
     "sts": "node --experimental-strip-types tools/sts-cli/main.ts",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test:cli": "node --experimental-strip-types --test tools/sts-cli/**/*.test.ts",
+    "test:cli": "STS_CLI_TEST=1 node --experimental-strip-types --test tools/sts-cli/**/*.test.ts",
     "verify:cli": "npm run check && npm run test:cli"
   },
   "devDependencies": {
