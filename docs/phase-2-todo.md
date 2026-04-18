@@ -59,6 +59,30 @@
 - 输入参数与 `actions` 返回保持一致
 - 出错时能给出明确失败原因
 
+已确认 bug:
+
+- 宝箱房在“箱子尚未被玩家点开”的初始状态下，`context` 会长期停留在 `stateType=treasure` + `isStable=false` + `isTransitioning=true`
+- 此时 `/api/v1/actions` 为空，`/api/v1/treasure` 返回 `canProceed=false` 且 `relics=[]`
+- 实际游戏界面并不是短暂过场，而是在等待玩家点击箱子本体；当前 CLI 没有暴露这个动作
+- 结果是 agent 会把未开箱状态误判成“仍在 transition”，持续等待而无法推进整局
+- 战斗中一旦打出手牌，剩余手牌的顺序和 `actions` 返回的 `index` 可能立刻变化
+- agent 如果复用上一次读取到的旧 `index` 连续出牌，就可能把下一张牌打错，甚至把攻击误发成防御或反过来
+- 这个问题不是偶发读取抖动，而是当前“按 index 执行”的天然风险，在多步战斗回合里会稳定出现
+
+当前状态:
+
+- 宝箱未开箱问题：`已完成`
+- 战斗旧 index 误出牌的执行层防护：`已完成（通过可选 expected_* 校验先做 fail-fast）`
+
+修复建议:
+
+- 为宝箱房补一个“打开箱子 / 点击箱体”的显式动作，先把房间从未展开状态切到 relic 可选状态
+- 或者至少把该状态单独标成可行动的等待输入态，而不是继续复用 `isTransitioning=true`
+- 在 `wait room-ready` 和房间流转文档里把这个场景列为已知例外，避免 agent 无限等待
+- 战斗动作不要只靠瞬时 `index` 作为唯一标识，至少要补一个更稳定的卡牌定位方式
+- 可选方案包括：给动作面暴露稳定的 hand instance id，或在执行层支持按 `card_id + title + cost + legalTargets` 做二次匹配校验
+- 在更稳的执行契约落地前，agent 侧必须遵守“每出一张牌后重新读取 `actions` / `combat hand`，禁止复用旧 index 连打”
+
 ### P2-3 多步交互
 
 最后处理:
@@ -135,6 +159,105 @@
 - 判断是否需要重试
 - 明确哪些错误禁止自动重试
 
+### 4.5 做更高层 CLI 聚合
+
+当前状态: `已完成（第一批）`
+
+当前 CLI 的底层能力够用，但 agent 实战里仍然显得过碎，尤其是战斗读路径。
+
+建议区分两类聚合:
+
+- 查询层聚合: 应该更积极补高层命令
+- 执行层聚合: 只能在中间状态可安全重解析时再做
+
+优先建议补的高层读命令:
+
+- `sts combat snapshot`
+- `sts room snapshot --detail ...`
+
+目标:
+
+- 一次返回 `context + actions + combat summary + enemies + hand + player summary`
+- 让 agent 在战斗回合开始时尽量只做一次读，而不是重复调用多个窄接口
+- 保留当前细粒度 endpoint 作为底层能力和调试能力，而不是强迫 agent 总是手工拼装
+
+当前已落地:
+
+- `sts combat snapshot`
+- `sts room snapshot --detail standard|full`
+- `sts card-reward skip`
+
+可以安全聚合的执行命令:
+
+- `continue_game`
+- `proceed`
+- `choose_map_node`
+- `rewards claim-all-safe`
+- 未来的 `rest auto` / `treasure auto-open` 这类确定性局外流程
+
+不应在当前契约下盲目聚合的执行命令:
+
+- 战斗内多张牌连续打出的“脚本式连打”
+
+原因:
+
+- 战斗动作目前主要还是 `action + index + target` 契约
+- 一旦打出一张牌，剩余手牌顺序和 `actions` 返回的 `index` 会变化
+- 如果多步命令内部只是复用同一份旧动作面，就会稳定地产生误出牌，而不是减少误操作
+
+因此，只有在下面条件成立后，才适合做更高层的战斗多步命令:
+
+- 执行器内部每一步都会重新读取当前动作面
+- 或者动作面暴露稳定的 hand instance id
+- 或者执行层能按更丰富的卡牌身份字段做二次匹配校验
+
+### 4.6 增加可复盘的结构化日志
+
+当前状态: `已完成（基础版）`
+
+除了补高层命令，server 端或 CLI 端也应提供可控的执行日志，方便后期复盘、定位误操作，并据此优化 agent 策略和接口设计。
+
+建议至少区分两档:
+
+- 默认结构化日志: 面向日常复盘和问题定位
+- verbose trace: 面向调试 wait、转场、动作失配和恢复逻辑
+
+建议记录的核心字段:
+
+- 时间戳
+- run id / floor / room / stateType / isStable
+- 本次读取或执行的 CLI 命令
+- 读取到的关键动作面摘要，例如 `actions` 数量、hand 摘要、敌人摘要
+- agent 最终选择的动作和参数，例如 `action + index + target`
+- 动作前后的 observation version 或 `delta observation` 摘要
+- 是否命中了 helper flow，例如 `proceed`、`continue_game`、未来的高层聚合命令
+- 失败原因、恢复建议、调试快照路径
+
+推荐额外补一个相关 id:
+
+- 每个 agent 决策周期的 correlation id
+- 每个多步 helper 命令的 step id 或 parent id
+
+这样可以直接支持几类复盘:
+
+- 为什么 agent 在某一拍选择了某个动作
+- 误出牌时，当时看到的手牌索引和执行时的真实动作面是否已变化
+- 某些房间是否存在明显的过度查询，适合作 `combat snapshot` / `room snapshot`
+- wait 或转场失败时，错误是来自 server、CLI 还是游戏内状态机
+
+建议边界:
+
+- 默认日志不要无上限落完整 observation，避免噪声和体积失控
+- 正常档优先记录结构化摘要，完整快照只在失败、显式 debug 或采样模式下保留
+- CLI 日志和 server 日志最好能通过同一个 correlation id 关联
+
+当前已落地:
+
+- server 结构化执行日志 `action-execution.jsonl`
+- 失败时调试快照落盘
+- CLI `wait --verbose` trace
+- CLI `exec` 自动附带 correlation id，server 端日志可关联
+
 ## 5. 建议实现顺序
 
 1. 增加动作执行总入口
@@ -155,6 +278,7 @@
 当前仍待补强:
 
 - 游戏内完整 smoke test 和边界动作回归
+- 更稳定的手牌实例 id，而不是只靠 `index + expected_*`
 
 ## 6. 验收标准
 
