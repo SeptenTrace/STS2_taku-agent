@@ -20,6 +20,7 @@ export const usage = `Usage:
   sts rewards
   sts rewards claim-all-safe
   sts card-reward
+  sts card-reward skip
   sts card-selection
   sts bundle-selection
   sts relic-selection
@@ -65,6 +66,7 @@ Examples:
   sts wait player-ready
   sts wait rewards 10
   sts rewards claim-all-safe
+  sts card-reward skip
   sts exec open_treasure
   sts exec play_card 0 jaw_worm_0
   sts exec select_card 1

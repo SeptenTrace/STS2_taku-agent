@@ -20,7 +20,7 @@ Use this skill to advance stable non-combat rooms without over-querying.
 - Menu resume: `sts menu`, `sts exec continue_game`
 - Map: `sts map`, `sts exec choose_map_node index=N`
 - Rewards: `sts rewards`, `sts rewards claim-all-safe`, `sts exec claim_reward index=N`
-- Card rewards: `sts card-reward`, `sts exec select_card_reward index=N`, `sts exec skip_card_reward`
+- Card rewards: `sts card-reward`, `sts card-reward skip`, `sts exec select_card_reward index=N`, `sts exec skip_card_reward`
 - Events: `sts event`, `sts exec choose_event_option index=N`, `sts exec advance_dialogue`
 - Shops: `sts shop`, `sts fake-merchant`, `sts exec shop_purchase index=N`, `sts exec proceed`
 - Rest sites: `sts rest-site`, `sts exec choose_rest_option index=N`, `sts exec proceed`
@@ -36,5 +36,6 @@ Use this skill to advance stable non-combat rooms without over-querying.
 ## Efficiency Rules
 
 - Prefer `sts rewards claim-all-safe` before card rewards.
+- Do not assume card rewards are mandatory. When `canSkip=true`, keep `skip_card_reward` as an explicit legal candidate.
 - Use one room-specific endpoint instead of multiple unrelated reads.
 - Only read `sts player summary` or `sts knowledge current` when the room decision depends on build context.

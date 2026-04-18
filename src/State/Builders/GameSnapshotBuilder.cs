@@ -1633,8 +1633,14 @@ internal sealed class GameSnapshotBuilder
                 facts.Add($"Visible rewards: {rewards?.Items.Count ?? 0}.");
                 break;
             case "card_reward":
-                goal = "Judge card reward candidates against the current deck summary.";
+                goal = cardReward?.CanSkip == true
+                    ? "Judge the card reward candidates and remember that skipping is also legal."
+                    : "Judge card reward candidates against the current deck summary.";
                 facts.Add($"Card reward choices: {cardReward?.Cards.Count ?? 0}.");
+                if (cardReward is not null)
+                {
+                    facts.Add($"Can skip reward: {cardReward.CanSkip}.");
+                }
                 break;
             case "card_select":
                 goal = "Resolve the current card selection with only the visible choices.";

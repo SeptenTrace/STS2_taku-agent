@@ -57,6 +57,33 @@ async function printRequest<T>(client: RequestClient, output: Output, path: stri
   output.printJson(await client.request<T>(path));
 }
 
+async function executeAction(
+  client: RequestClient,
+  output: Output,
+  action: string,
+  args: string[]
+): Promise<void> {
+  const invocation = buildExecInvocation(action, args);
+  const correlationId = randomUUID();
+  const execution = await client.request<ActionExecutionResponse>("/api/v1/actions/execute", {
+    method: "POST",
+    body: invocation.payload,
+    headers: {
+      "X-Sts-Correlation-Id": correlationId
+    }
+  });
+
+  if (invocation.waitFor && execution.status === "ok") {
+    output.printJson({
+      execution,
+      wait: await waitForCondition(client, invocation.waitFor, invocation.timeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS, { verbose: invocation.waitVerbose })
+    });
+    return;
+  }
+
+  output.printJson(execution);
+}
+
 async function commandNext(client: RequestClient, output: Output): Promise<void> {
   const [context, observation] = await Promise.all([
     client.request<ContextResponse>("/api/v1/context"),
@@ -186,6 +213,11 @@ export async function dispatch(
       await printRequest<RewardsResponse>(client, output, "/api/v1/rewards");
       return;
     case "card-reward":
+      if ((args[0] ?? "").toLowerCase() === "skip") {
+        await executeAction(client, output, "skip_card_reward", args.slice(1));
+        return;
+      }
+
       await printRequest<CardRewardResponse>(client, output, "/api/v1/card-reward");
       return;
     case "card-select":
@@ -237,25 +269,7 @@ export async function dispatch(
     case "do":
     case "act": {
       const action = args[0] ?? "";
-      const invocation = buildExecInvocation(action, args.slice(1));
-      const correlationId = randomUUID();
-      const execution = await client.request<ActionExecutionResponse>("/api/v1/actions/execute", {
-        method: "POST",
-        body: invocation.payload,
-        headers: {
-          "X-Sts-Correlation-Id": correlationId
-        }
-      });
-
-      if (invocation.waitFor && execution.status === "ok") {
-        output.printJson({
-          execution,
-          wait: await waitForCondition(client, invocation.waitFor, invocation.timeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS, { verbose: invocation.waitVerbose })
-        });
-        return;
-      }
-
-      output.printJson(execution);
+      await executeAction(client, output, action, args.slice(1));
       return;
     }
     case "full":

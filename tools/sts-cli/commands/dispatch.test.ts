@@ -428,6 +428,54 @@ test("dispatch fake-merchant uses the typed fake merchant endpoint", async () =>
   assert.equal((output.jsonValues[0] as { eventId: string }).eventId, "FAKE_MERCHANT");
 });
 
+test("dispatch card-reward skip executes skip_card_reward with its default wait", async () => {
+  const client = new MockClient({
+    "/api/v1/actions/execute": {
+      status: "ok",
+      actionType: "skip_card_reward",
+      message: "Skipped card reward."
+    },
+    "/api/v1/context": [
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      }
+    ],
+    "/api/v1/actions": [
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Unknown" }
+        ]
+      },
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Unknown" }
+        ]
+      }
+    ]
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "card-reward", ["skip"], output);
+
+  assert.equal(client.requests[0]?.path, "/api/v1/actions/execute");
+  assert.deepEqual(client.requests[0]?.options?.body, {
+    actionType: "skip_card_reward",
+    parameters: {}
+  });
+  assert.equal((output.jsonValues[0] as { execution: { actionType: string } }).execution.actionType, "skip_card_reward");
+});
+
 test("dispatch rejects unknown subcommands with CliError", async () => {
   const client = new MockClient({});
   const output = new MockOutput();

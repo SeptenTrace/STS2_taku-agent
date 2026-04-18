@@ -17,6 +17,7 @@ Use this skill for combat-only decision and execution loops.
    `sts knowledge current` if ids need expansion.
 4. Execute one action with `sts exec ...`.
 5. Re-read via `sts room summary`, `sts delta`, or another narrow endpoint.
+6. If combat ends on `card_reward`, hand control to room-flow logic and remember that `skip_card_reward` is a legal follow-up action.
 
 ## Preferred Commands
 

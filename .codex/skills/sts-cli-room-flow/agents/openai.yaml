@@ -1,4 +1,4 @@
 interface:
   display_name: "STS CLI Room Flow"
   short_description: "Advance non-combat rooms through sts"
-  default_prompt: "Use $sts-cli-room-flow to progress the current non-combat Slay the Spire 2 room with the sts CLI."
+  default_prompt: "Use $sts-cli-room-flow to progress the current non-combat Slay the Spire 2 room with the sts CLI, including legal skip flows such as skip_card_reward when available."
