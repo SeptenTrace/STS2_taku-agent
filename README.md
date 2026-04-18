@@ -163,6 +163,7 @@ Local CLI:
 - `./sts relic-selection`
 - `./sts crystal-sphere`
 - `./sts overlay`
+- `./sts doctor`
 - `./sts exec continue_game`
 - `./sts wait run-active`
 - `./sts wait player-ready`
@@ -181,6 +182,9 @@ CLI implementation notes:
 Higher-level CLI helpers:
 - `./sts room summary` returns one combined snapshot for the current actionable room
 - `./sts menu` reports whether the main menu can currently resume the saved run
+- `./sts doctor` runs a lightweight end-to-end health check over ping, context, actions, and either `menu` or `room summary`
+- `./sts wait ... --verbose` includes poll-by-poll trace data so timeout diagnosis does not rely on the final context alone
+- `./sts exec ... --wait-for-ready|--wait-for-room|--wait-for-run` exposes higher-level wait aliases for common follow-up states
 - `./sts wait run-active` waits for the game to leave the main menu and settle into a stable in-run state
 - `./sts wait player-ready` waits for a stable player-actionable state or player combat turn
 - `./sts wait rewards` / `./sts wait map` / `./sts wait monster` wait for a stable matching room state, not just a one-frame context match
@@ -190,7 +194,7 @@ Higher-level CLI helpers:
 Local development helpers:
 - `./restart_game.sh --wait-for-server` restarts the game, waits for the observer server, and auto-resumes the saved run when the main menu exposes `continue_game`
 - `./dev_cycle.sh` runs the full build -> deploy -> restart -> wait loop, including the same auto-continue behavior
-- `./dev_cycle.sh --smoke` adds a basic `./sts ping`, `./sts context`, and `./sts actions` verification pass after restart
+- `./dev_cycle.sh --smoke` adds a basic `./sts ping`, `./sts context`, `./sts actions`, and `./sts doctor` verification pass after restart
 - set `STS2_AUTO_CONTINUE=0` or pass `--no-auto-continue` to leave the game on the main menu after restart
 
 Transition handling:

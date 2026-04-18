@@ -23,8 +23,9 @@ import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
 import { CliError } from "../core/errors.ts";
 import { StreamOutput, type Output } from "../core/output.ts";
 import { buildRoomSummary, claimAllSafeRewards } from "./combo.ts";
+import { runDoctor } from "./doctor.ts";
 import { buildExecInvocation } from "./exec.ts";
-import { waitForCondition } from "./wait.ts";
+import { buildWaitInvocation, waitForCondition } from "./wait.ts";
 import { usage } from "../usage.ts";
 
 const knowledgePaths: Record<string, string> = {
@@ -177,19 +178,12 @@ export async function dispatch(
     case "overlay":
       await printRequest<OverlayResponse>(client, output, "/api/v1/overlay");
       return;
+    case "doctor":
+      output.printJson(await runDoctor(client));
+      return;
     case "wait": {
-      const condition = args[0];
-      if (!condition) {
-        throw new CliError("Usage: ./sts wait CONDITION [TIMEOUT_SECONDS]");
-      }
-
-      const timeoutRaw = args[1];
-      const timeout = timeoutRaw === undefined ? DEFAULT_WAIT_TIMEOUT_SECONDS : Number(timeoutRaw);
-      if (!Number.isInteger(timeout) || timeout < 0) {
-        throw new CliError(`TIMEOUT_SECONDS must be an integer: ${timeoutRaw}`);
-      }
-
-      output.printJson(await waitForCondition(client, condition, timeout));
+      const invocation = buildWaitInvocation(args, DEFAULT_WAIT_TIMEOUT_SECONDS);
+      output.printJson(await waitForCondition(client, invocation.condition, invocation.timeoutSeconds, { verbose: invocation.verbose }));
       return;
     }
     case "room": {
@@ -214,7 +208,7 @@ export async function dispatch(
       if (invocation.waitFor && execution.status === "ok") {
         output.printJson({
           execution,
-          wait: await waitForCondition(client, invocation.waitFor, invocation.timeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS)
+          wait: await waitForCondition(client, invocation.waitFor, invocation.timeoutSeconds ?? DEFAULT_WAIT_TIMEOUT_SECONDS, { verbose: invocation.waitVerbose })
         });
         return;
       }

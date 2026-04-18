@@ -1,11 +1,19 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { normalizeWaitCondition, waitForCondition } from "./wait.ts";
+import { buildWaitInvocation, normalizeWaitCondition, waitForCondition } from "./wait.ts";
 import { MockClient } from "../test-helpers/mock-client.ts";
 
 test("normalizeWaitCondition lowercases and normalizes dashes", () => {
   assert.equal(normalizeWaitCondition("Player-Turn"), "player_turn");
+});
+
+test("buildWaitInvocation supports timeout flags and verbose mode", () => {
+  assert.deepEqual(buildWaitInvocation(["room-ready", "--timeout", "9", "--verbose"], 15), {
+    condition: "room-ready",
+    timeoutSeconds: 9,
+    verbose: true
+  });
 });
 
 test("waitForCondition resolves after a stable matching stateType", async () => {
@@ -381,4 +389,110 @@ test("waitForCondition supports stable resumed-run waits after continue_game", a
 
   const result = await waitForCondition(client, "run_active", 1);
   assert.equal(result.context.stateType, "map");
+});
+
+test("waitForCondition can include verbose trace output", async () => {
+  const client = new MockClient({
+    "/api/v1/context": [
+      {
+        stateType: "menu",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "map",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      }
+    ],
+    "/api/v1/actions": [
+      {
+        stateType: "menu",
+        actions: [
+          { actionType: "continue_game", label: "Continue game" }
+        ]
+      },
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Monster" }
+        ]
+      },
+      {
+        stateType: "map",
+        actions: [
+          { actionType: "choose_map_node", label: "Node 0: Monster" }
+        ]
+      }
+    ]
+  });
+
+  const result = await waitForCondition(client, "run_active", 1, { verbose: true });
+  assert.equal(result.trace?.length, 3);
+  assert.equal(result.trace?.[0]?.reason, "run_not_active");
+  assert.equal(result.trace?.[2]?.reason, "interactive_run_active");
+});
+
+test("waitForCondition supports room_ready in combat states", async () => {
+  const client = new MockClient({
+    "/api/v1/context": [
+      {
+        stateType: "monster",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "monster",
+        roomType: "Monster",
+        isStable: true,
+        isTransitioning: false
+      }
+    ],
+    "/api/v1/combat/summary": [
+      {
+        roomType: "monster",
+        round: 1,
+        side: "player",
+        handCount: 5,
+        enemyCount: 1,
+        incomingDamage: 3,
+        playableCards: 5,
+        potionActions: 0,
+        actionCount: 6,
+        piles: {
+          draw: 10,
+          discard: 0,
+          exhaust: 0
+        }
+      },
+      {
+        roomType: "monster",
+        round: 1,
+        side: "player",
+        handCount: 5,
+        enemyCount: 1,
+        incomingDamage: 3,
+        playableCards: 5,
+        potionActions: 0,
+        actionCount: 6,
+        piles: {
+          draw: 10,
+          discard: 0,
+          exhaust: 0
+        }
+      }
+    ]
+  });
+
+  const result = await waitForCondition(client, "room_ready", 1);
+  assert.equal(result.context.stateType, "monster");
+  assert.equal(result.combat?.roomType, "monster");
 });

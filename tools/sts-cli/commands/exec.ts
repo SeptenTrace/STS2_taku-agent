@@ -6,6 +6,7 @@ export interface ExecInvocation {
   payload: JsonObject;
   waitFor?: string;
   timeoutSeconds: number;
+  waitVerbose: boolean;
 }
 
 export function buildExecPayload(action: string, args: string[]): JsonObject {
@@ -52,6 +53,7 @@ export function buildExecInvocation(action: string, args: string[]): ExecInvocat
   const actionArgs: string[] = [];
   let waitFor: string | undefined;
   let timeoutSeconds = DEFAULT_WAIT_TIMEOUT_SECONDS;
+  let waitVerbose = false;
 
   for (let index = 0; index < args.length; index++) {
     const arg = args[index]!;
@@ -90,13 +92,38 @@ export function buildExecInvocation(action: string, args: string[]): ExecInvocat
       continue;
     }
 
+    if (arg === "--wait-for-ready") {
+      waitFor = "player_ready";
+      continue;
+    }
+
+    if (arg === "--wait-for-room") {
+      waitFor = "room_ready";
+      continue;
+    }
+
+    if (arg === "--wait-for-run") {
+      waitFor = "run_active";
+      continue;
+    }
+
+    if (arg === "--wait-verbose") {
+      waitVerbose = true;
+      continue;
+    }
+
     actionArgs.push(arg);
+  }
+
+  if (waitVerbose && !waitFor) {
+    throw new CliError("`--wait-verbose` requires a wait target such as `--wait-for`, `--wait-for-ready`, `--wait-for-room`, or `--wait-for-run`.");
   }
 
   return {
     payload: buildExecPayload(action, actionArgs),
     waitFor,
-    timeoutSeconds
+    timeoutSeconds,
+    waitVerbose
   };
 }
 

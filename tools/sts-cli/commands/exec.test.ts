@@ -45,7 +45,8 @@ test("buildExecInvocation extracts wait flags from positional exec arguments", (
       }
     },
     waitFor: "player_turn",
-    timeoutSeconds: 9
+    timeoutSeconds: 9,
+    waitVerbose: false
   });
 });
 
@@ -59,8 +60,29 @@ test("buildExecInvocation extracts inline wait flags from key=value exec argumen
       }
     },
     waitFor: "monster",
-    timeoutSeconds: 15
+    timeoutSeconds: 15,
+    waitVerbose: false
   });
+});
+
+test("buildExecInvocation supports high-level wait aliases", () => {
+  const invocation = buildExecInvocation("continue_game", ["--wait-for-run", "--wait-verbose", "--timeout", "30"]);
+  assert.deepEqual(invocation, {
+    payload: {
+      actionType: "continue_game",
+      parameters: {}
+    },
+    waitFor: "run_active",
+    timeoutSeconds: 30,
+    waitVerbose: true
+  });
+});
+
+test("buildExecInvocation rejects wait verbose without a wait target", () => {
+  assert.throws(
+    () => buildExecInvocation("end_turn", ["--wait-verbose"]),
+    (error) => error instanceof CliError && error.message.includes("--wait-verbose")
+  );
 });
 
 test("buildExecInvocation rejects malformed wait timeout", () => {

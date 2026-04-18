@@ -189,7 +189,7 @@ maybe_auto_continue_run() {
   fi
 
   echo "Resuming saved run..."
-  STS_OBSERVER_URL="$STS_OBSERVER_URL" "$REPO_ROOT/sts" exec continue_game --wait-for run_active --timeout "$SERVER_TIMEOUT_SECONDS" >/dev/null
+  STS_OBSERVER_URL="$STS_OBSERVER_URL" "$REPO_ROOT/sts" exec continue_game --wait-for-run --timeout "$SERVER_TIMEOUT_SECONDS" >/dev/null
   echo "Saved run resumed."
 }
 

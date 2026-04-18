@@ -88,6 +88,7 @@ if [[ "$RUN_SMOKE" -eq 1 ]]; then
   ./sts ping
   ./sts context
   ./sts actions
+  ./sts doctor
 fi
 
 echo "Development cycle complete."

@@ -3,17 +3,42 @@ import { CliError, HttpError } from "../core/errors.ts";
 import type { RequestClient } from "../core/client.ts";
 import type { ActionSurfaceResponse, CombatSummaryResponse, ContextResponse } from "../api-types.ts";
 
+export interface WaitTraceEntry {
+  poll: number;
+  matched: boolean;
+  reason: string;
+  context: ContextResponse;
+  combat?: CombatSummaryResponse;
+  actions?: ActionSurfaceResponse;
+}
+
 export interface WaitResult {
   condition: string;
   matched: true;
   context: ContextResponse;
   combat?: CombatSummaryResponse;
+  trace?: WaitTraceEntry[];
+}
+
+export interface WaitOptions {
+  verbose?: boolean;
+}
+
+export interface WaitInvocation {
+  condition: string;
+  timeoutSeconds: number;
+  verbose: boolean;
 }
 
 interface WaitObservation {
   context: ContextResponse;
   combat: CombatSummaryResponse | null;
   actions: ActionSurfaceResponse | null;
+}
+
+interface WaitEvaluation {
+  matched: boolean;
+  reason: string;
 }
 
 const READY_STATE_PRIMARY_ACTIONS: Readonly<Record<string, readonly string[]>> = {
@@ -33,6 +58,49 @@ const READY_STATE_PRIMARY_ACTIONS: Readonly<Record<string, readonly string[]>> =
 
 export function normalizeWaitCondition(condition: string): string {
   return condition.trim().replaceAll("-", "_").toLowerCase();
+}
+
+export function buildWaitInvocation(args: string[], defaultTimeoutSeconds: number): WaitInvocation {
+  const condition = args[0];
+  if (!condition) {
+    throw new CliError("Usage: ./sts wait CONDITION [TIMEOUT_SECONDS] [--verbose]");
+  }
+
+  let timeoutSeconds = defaultTimeoutSeconds;
+  let verbose = false;
+
+  for (let index = 1; index < args.length; index++) {
+    const arg = args[index]!;
+    if (arg === "--verbose") {
+      verbose = true;
+      continue;
+    }
+
+    if (arg === "--timeout") {
+      const timeoutRaw = args[index + 1];
+      if (timeoutRaw === undefined) {
+        throw new CliError("Usage: ./sts wait CONDITION [TIMEOUT_SECONDS] [--verbose]");
+      }
+
+      timeoutSeconds = parseWaitTimeout(timeoutRaw);
+      index++;
+      continue;
+    }
+
+    if (arg.startsWith("--timeout=")) {
+      timeoutSeconds = parseWaitTimeout(arg.slice("--timeout=".length));
+      continue;
+    }
+
+    if (!arg.startsWith("--") && index === 1) {
+      timeoutSeconds = parseWaitTimeout(arg);
+      continue;
+    }
+
+    throw new CliError(`Unknown wait argument: ${arg}`);
+  }
+
+  return { condition, timeoutSeconds, verbose };
 }
 
 function contextStateTypeMatches(context: ContextResponse, expected: string): boolean {
@@ -107,7 +175,7 @@ async function maybeReadActionSurface(client: RequestClient, context: ContextRes
 
 async function readWaitObservation(client: RequestClient, condition: string): Promise<WaitObservation> {
   const context = await client.request<ContextResponse>("/api/v1/context");
-  const combat = condition === "player_turn" || condition === "enemy_turn" || condition === "player_ready" || condition === "run_active" || isCombatState(condition)
+  const combat = condition === "player_turn" || condition === "enemy_turn" || condition === "player_ready" || condition === "room_ready" || condition === "run_active" || isCombatState(condition)
     ? await maybeReadCombatSummary(client, context)
     : null;
   const actions = await maybeReadActionSurface(client, context, condition);
@@ -115,65 +183,123 @@ async function readWaitObservation(client: RequestClient, condition: string): Pr
   return { context, combat, actions };
 }
 
-function observationMatchesCondition(observation: WaitObservation, condition: string): boolean {
+function buildWaitTraceEntry(poll: number, evaluation: WaitEvaluation, observation: WaitObservation): WaitTraceEntry {
+  return {
+    poll,
+    matched: evaluation.matched,
+    reason: evaluation.reason,
+    context: observation.context,
+    combat: observation.combat ?? undefined,
+    actions: observation.actions ?? undefined
+  };
+}
+
+function evaluateObservation(observation: WaitObservation, condition: string): WaitEvaluation {
   if (!isContextStable(observation.context)) {
-    return false;
+    return { matched: false, reason: "context_not_stable" };
   }
 
   if (condition === "player_turn") {
-    return isCombatState(observation.context.stateType) && isCombatPlayerReady(observation.combat);
+    if (!isCombatState(observation.context.stateType)) {
+      return { matched: false, reason: "not_in_combat" };
+    }
+
+    return isCombatPlayerReady(observation.combat)
+      ? { matched: true, reason: "player_turn_ready" }
+      : { matched: false, reason: "combat_not_player_ready" };
   }
 
   if (condition === "enemy_turn") {
-    return isCombatState(observation.context.stateType) && isCombatEnemyStable(observation.combat);
+    if (!isCombatState(observation.context.stateType)) {
+      return { matched: false, reason: "not_in_combat" };
+    }
+
+    return isCombatEnemyStable(observation.combat)
+      ? { matched: true, reason: "enemy_turn_stable" }
+      : { matched: false, reason: "combat_not_enemy_stable" };
   }
 
   if (condition === "player_ready") {
     if (isCombatState(observation.context.stateType)) {
-      return isCombatPlayerReady(observation.combat);
+      return isCombatPlayerReady(observation.combat)
+        ? { matched: true, reason: "combat_player_ready" }
+        : { matched: false, reason: "combat_not_player_ready" };
     }
 
-    return isInteractiveReadyState(observation.context.stateType) &&
-      hasPrimaryAction(observation.actions, observation.context.stateType);
+    if (!isInteractiveReadyState(observation.context.stateType)) {
+      return { matched: false, reason: "state_not_player_ready_compatible" };
+    }
+
+    return hasPrimaryAction(observation.actions, observation.context.stateType)
+      ? { matched: true, reason: "interactive_player_ready" }
+      : { matched: false, reason: "missing_primary_action" };
   }
 
-  if (condition === "run_active") {
-    if (observation.context.stateType === "menu" || observation.context.stateType === "unknown") {
-      return false;
+  if (condition === "room_ready") {
+    if (observation.context.stateType === "menu" || observation.context.stateType === "unknown" || observation.context.stateType === "overlay") {
+      return { matched: false, reason: "not_in_actionable_room" };
     }
 
     if (isCombatState(observation.context.stateType)) {
-      return observation.combat !== null;
+      return observation.combat !== null
+        ? { matched: true, reason: "combat_room_ready" }
+        : { matched: false, reason: "combat_summary_unavailable" };
     }
 
     if (isInteractiveReadyState(observation.context.stateType)) {
-      return hasPrimaryAction(observation.actions, observation.context.stateType);
+      return hasPrimaryAction(observation.actions, observation.context.stateType)
+        ? { matched: true, reason: "interactive_room_ready" }
+        : { matched: false, reason: "missing_primary_action" };
     }
 
-    return true;
+    return { matched: false, reason: "state_not_room_ready_compatible" };
+  }
+
+  if (condition === "run_active") {
+    if (observation.context.stateType === "menu" || observation.context.stateType === "unknown" || observation.context.stateType === "overlay") {
+      return { matched: false, reason: "run_not_active" };
+    }
+
+    if (isCombatState(observation.context.stateType)) {
+      return observation.combat !== null
+        ? { matched: true, reason: "combat_run_active" }
+        : { matched: false, reason: "combat_summary_unavailable" };
+    }
+
+    if (isInteractiveReadyState(observation.context.stateType)) {
+      return hasPrimaryAction(observation.actions, observation.context.stateType)
+        ? { matched: true, reason: "interactive_run_active" }
+        : { matched: false, reason: "missing_primary_action" };
+    }
+
+    return { matched: true, reason: "stable_run_active" };
   }
 
   if (!contextStateTypeMatches(observation.context, condition)) {
-    return false;
+    return { matched: false, reason: `state_mismatch:${observation.context.stateType}` };
   }
 
   if (condition === "player_ready") {
-    return false;
+    return { matched: false, reason: "unreachable_player_ready_branch" };
   }
 
   if (condition === "player_turn" || condition === "enemy_turn") {
-    return false;
+    return { matched: false, reason: "unreachable_turn_branch" };
   }
 
   if (isCombatState(observation.context.stateType)) {
-    return observation.combat !== null;
+    return observation.combat !== null
+      ? { matched: true, reason: "combat_state_matched" }
+      : { matched: false, reason: "combat_summary_unavailable" };
   }
 
   if (isInteractiveReadyState(observation.context.stateType)) {
-    return hasPrimaryAction(observation.actions, observation.context.stateType);
+    return hasPrimaryAction(observation.actions, observation.context.stateType)
+      ? { matched: true, reason: "interactive_state_matched" }
+      : { matched: false, reason: "missing_primary_action" };
   }
 
-  return true;
+  return { matched: true, reason: "stable_state_matched" };
 }
 
 function buildObservationStabilityKey(observation: WaitObservation): string {
@@ -184,21 +310,42 @@ function buildObservationStabilityKey(observation: WaitObservation): string {
   });
 }
 
-export async function waitForCondition(client: RequestClient, rawCondition: string, timeoutSeconds: number): Promise<WaitResult> {
+function parseWaitTimeout(rawValue: string): number {
+  const timeout = Number(rawValue);
+  if (!Number.isInteger(timeout) || timeout < 0) {
+    throw new CliError(`TIMEOUT_SECONDS must be an integer: ${rawValue}`);
+  }
+
+  return timeout;
+}
+
+export async function waitForCondition(client: RequestClient, rawCondition: string, timeoutSeconds: number, options: WaitOptions = {}): Promise<WaitResult> {
   const condition = normalizeWaitCondition(rawCondition);
   const deadline = Date.now() + timeoutSeconds * 1000;
   let previousMatchedKey: string | null = null;
+  const trace: WaitTraceEntry[] = [];
+  let poll = 0;
 
   while (Date.now() < deadline) {
     const observation = await readWaitObservation(client, condition);
-    const matched = observationMatchesCondition(observation, condition);
+    const evaluation = evaluateObservation(observation, condition);
+    poll++;
 
-    if (matched) {
+    if (options.verbose) {
+      trace.push(buildWaitTraceEntry(poll, evaluation, observation));
+    }
+
+    if (evaluation.matched) {
       const stabilityKey = buildObservationStabilityKey(observation);
       if (stabilityKey === previousMatchedKey) {
-        return observation.combat === null
+        const result: WaitResult = observation.combat === null
           ? { condition, matched: true, context: observation.context }
           : { condition, matched: true, context: observation.context, combat: observation.combat };
+        if (options.verbose) {
+          result.trace = trace;
+        }
+
+        return result;
       }
 
       previousMatchedKey = stabilityKey;
@@ -212,5 +359,10 @@ export async function waitForCondition(client: RequestClient, rawCondition: stri
   }
 
   const latestContext = await client.request<ContextResponse>("/api/v1/context");
-  throw new CliError(`Timed out waiting for condition: ${condition}\n${JSON.stringify(latestContext, null, 2)}`);
+  const timeoutPayload = {
+    condition,
+    latestContext,
+    trace: options.verbose ? trace : undefined
+  };
+  throw new CliError(`Timed out waiting for condition: ${condition}\n${JSON.stringify(timeoutPayload, null, 2)}`);
 }

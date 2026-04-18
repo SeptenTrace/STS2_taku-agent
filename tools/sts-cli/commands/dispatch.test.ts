@@ -130,6 +130,39 @@ test("dispatch menu uses the typed menu endpoint", async () => {
   assert.equal((output.jsonValues[0] as { canContinue: boolean }).canContinue, true);
 });
 
+test("dispatch doctor runs the built-in diagnostics", async () => {
+  const client = new MockClient({
+    "/": {
+      name: "taku-agent-observer",
+      status: "ok",
+      port: 15527,
+      endpoints: []
+    },
+    "/api/v1/context": {
+      stateType: "menu",
+      isStable: true,
+      isTransitioning: false
+    },
+    "/api/v1/actions": {
+      stateType: "menu",
+      actions: [
+        { actionType: "continue_game", label: "Continue game" }
+      ]
+    },
+    "/api/v1/menu": {
+      isVisible: true,
+      hasContinueRun: true,
+      canContinue: true,
+      continueLabel: "继续游戏"
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "doctor", [], output);
+
+  assert.equal((output.jsonValues[0] as { ok: boolean }).ok, true);
+});
+
 test("dispatch room summary writes combined room data", async () => {
   const client = new MockClient({
     "/api/v1/context": {
