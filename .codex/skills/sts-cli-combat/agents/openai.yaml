@@ -1,0 +1,4 @@
+interface:
+  display_name: "STS CLI Combat"
+  short_description: "Fight battles through sts action surfaces"
+  default_prompt: "Use $sts-cli-combat to inspect the current battle and execute one legal combat action with the sts CLI."

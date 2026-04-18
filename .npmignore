@@ -1,0 +1,2 @@
+tools/sts-cli/**/*.test.ts
+tools/sts-cli/test-helpers/

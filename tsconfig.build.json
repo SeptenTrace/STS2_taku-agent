@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "outDir": "./dist/npm",
+    "rootDir": "./tools/sts-cli",
+    "declaration": false,
+    "sourceMap": false,
+    "allowImportingTsExtensions": false,
+    "rewriteRelativeImportExtensions": true
+  },
+  "include": [
+    "tools/sts-cli/api-types.ts",
+    "tools/sts-cli/config.ts",
+    "tools/sts-cli/main.ts",
+    "tools/sts-cli/usage.ts",
+    "tools/sts-cli/commands/*.ts",
+    "tools/sts-cli/core/*.ts"
+  ],
+  "exclude": [
+    "tools/sts-cli/**/*.test.ts",
+    "tools/sts-cli/test-helpers/**"
+  ]
+}

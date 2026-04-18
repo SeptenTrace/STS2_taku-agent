@@ -1,0 +1,4 @@
+interface:
+  display_name: "STS CLI Runtime"
+  short_description: "Build, restart, and verify sts locally"
+  default_prompt: "Use $sts-cli-runtime to rebuild, restart, and verify the local Slay the Spire 2 runtime behind the sts CLI."

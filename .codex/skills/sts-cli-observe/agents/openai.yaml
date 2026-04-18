@@ -1,0 +1,4 @@
+interface:
+  display_name: "STS CLI Observe"
+  short_description: "Read STS2 state with the global sts CLI"
+  default_prompt: "Use $sts-cli-observe to inspect the current Slay the Spire 2 state before deciding what to do next."

@@ -222,7 +222,7 @@ export async function dispatch(
     case "get": {
       const path = args[0];
       if (!path) {
-        throw new CliError("Usage: ./sts get /api/v1/...");
+        throw new CliError("Usage: sts get /api/v1/...");
       }
 
       await printRequest(client, output, path);

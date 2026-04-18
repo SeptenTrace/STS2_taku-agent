@@ -15,10 +15,13 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `pack/`: files packaged into the `.pck`
 - `tools/`: helper scripts for packaging
 - `tools/sts-cli/`: TypeScript implementation of the repo-local CLI
+- `bin/sts`: npm-packaged executable entry for the global `sts` command
 - `build_and_deploy.sh`: build locally and copy outputs into the game `mods` folder
 - `restart_game.sh`: stop and relaunch the local macOS game client, optionally waiting for the observer server
 - `dev_cycle.sh`: build, deploy, restart, wait for the observer server, and optionally run smoke checks
 - `build_release.sh`: build a shareable release package
+- `.codex/skills/`: repo-local Codex skills for using the `sts` CLI in phase 3 workflows
+- `install_repo_skills.sh`: link or copy the repo-local `sts` skills into the active Codex skills directory
 
 ## Current Status
 Phase 1 is complete as the observation layer, and Phase 2 is now implemented and validated in live gameplay on top of the same low-token contract.
@@ -172,13 +175,29 @@ Local CLI:
 - `./sts get /api/v1/state/full`
 
 CLI implementation notes:
-- `./sts` is a thin launcher that runs `tools/sts-cli/main.ts`
+- `./sts` and `bin/sts` both launch the same CLI entry at `tools/sts-cli/main.ts`
 - the CLI uses Node's built-in TypeScript stripping on Node 24+
 - run `npm run check` to type-check the CLI implementation
 - run `npm run test:cli` to execute the CLI unit tests with Node's built-in test runner
 - run `npm run verify:cli` to run both type-checking and the CLI test suite
+- run `npm run pack:cli` to inspect the npm package payload
 - `tools/sts-cli/core/` contains shared runtime pieces such as HTTP, JSON handling, errors, and output
 - `tools/sts-cli/commands/` contains command-specific logic such as `exec` payload building and `wait`
+
+Global npm package:
+- package name: `@retr0/sts-cli`
+- install from this checkout: `npm install -g .`
+- install from a packed tarball: `npm pack && npm install -g ./retr0-sts-cli-0.1.0.tgz`
+- after installation, use `sts help` from any directory
+
+Bundled Codex skills:
+- `.codex/skills/sts-cli-observe`
+- `.codex/skills/sts-cli-combat`
+- `.codex/skills/sts-cli-room-flow`
+- `.codex/skills/sts-cli-runtime`
+- these are organized by operation type so agents can choose a narrower workflow instead of loading one large monolithic skill
+- install them into Codex with `./install_repo_skills.sh`
+- pass `--copy` if you want standalone copies instead of symlinks
 
 Higher-level CLI helpers:
 - `./sts room summary` returns one combined snapshot for the current actionable room

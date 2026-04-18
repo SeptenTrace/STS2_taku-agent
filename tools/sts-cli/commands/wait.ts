@@ -63,7 +63,7 @@ export function normalizeWaitCondition(condition: string): string {
 export function buildWaitInvocation(args: string[], defaultTimeoutSeconds: number): WaitInvocation {
   const condition = args[0];
   if (!condition) {
-    throw new CliError("Usage: ./sts wait CONDITION [TIMEOUT_SECONDS] [--verbose]");
+    throw new CliError("Usage: sts wait CONDITION [TIMEOUT_SECONDS] [--verbose]");
   }
 
   let timeoutSeconds = defaultTimeoutSeconds;
@@ -79,7 +79,7 @@ export function buildWaitInvocation(args: string[], defaultTimeoutSeconds: numbe
     if (arg === "--timeout") {
       const timeoutRaw = args[index + 1];
       if (timeoutRaw === undefined) {
-        throw new CliError("Usage: ./sts wait CONDITION [TIMEOUT_SECONDS] [--verbose]");
+        throw new CliError("Usage: sts wait CONDITION [TIMEOUT_SECONDS] [--verbose]");
       }
 
       timeoutSeconds = parseWaitTimeout(timeoutRaw);

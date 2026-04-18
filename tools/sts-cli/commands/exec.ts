@@ -20,7 +20,7 @@ const DEFAULT_WAIT_CONDITIONS: Readonly<Record<string, string>> = {
 
 export function buildExecPayload(action: string, args: string[]): JsonObject {
   if (!action) {
-    throw new CliError("Usage: ./sts exec ACTION [key=value ...]");
+    throw new CliError("Usage: sts exec ACTION [key=value ...]");
   }
 
   const parameters: JsonObject = {};
@@ -69,7 +69,7 @@ export function buildExecInvocation(action: string, args: string[]): ExecInvocat
     if (arg === "--wait-for") {
       waitFor = args[index + 1];
       if (!waitFor) {
-        throw new CliError("Usage: ./sts exec ACTION ... [--wait-for CONDITION] [--timeout SECONDS]");
+        throw new CliError("Usage: sts exec ACTION ... [--wait-for CONDITION] [--timeout SECONDS]");
       }
 
       index++;
@@ -79,7 +79,7 @@ export function buildExecInvocation(action: string, args: string[]): ExecInvocat
     if (arg.startsWith("--wait-for=")) {
       waitFor = arg.slice("--wait-for=".length);
       if (!waitFor) {
-        throw new CliError("Usage: ./sts exec ACTION ... [--wait-for CONDITION] [--timeout SECONDS]");
+        throw new CliError("Usage: sts exec ACTION ... [--wait-for CONDITION] [--timeout SECONDS]");
       }
 
       continue;
@@ -88,7 +88,7 @@ export function buildExecInvocation(action: string, args: string[]): ExecInvocat
     if (arg === "--timeout") {
       const timeoutRaw = args[index + 1];
       if (timeoutRaw === undefined) {
-        throw new CliError("Usage: ./sts exec ACTION ... [--wait-for CONDITION] [--timeout SECONDS]");
+        throw new CliError("Usage: sts exec ACTION ... [--wait-for CONDITION] [--timeout SECONDS]");
       }
 
       timeoutSeconds = parseExecTimeout(timeoutRaw);
