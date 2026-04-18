@@ -259,6 +259,9 @@ Replay-friendly logging guidance:
 - each action log record includes timestamp, correlation id, run/floor/room context, player resources before/after, action parameters, action-surface summaries, delta facts, failure reason, and debug snapshot path
 - `sts exec ...` automatically sends a correlation id header so failed or successful writes can be traced in the server log
 - verbose `wait` traces are still the preferred tool for transition debugging and helper-flow diagnosis
+- terminal overlays such as `NGameOverScreen` now short-circuit `sts wait ...` with `status=terminal` and a machine-readable `terminalReason`
+- `sts logs tail` and `sts logs correlation <id>` now provide first-pass log access without requiring manual `tail` against the raw jsonl files
+- a remaining gap is a replay-oriented merged timeline view on top of `action-execution.jsonl` and `action-history.jsonl`
 
 The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
 

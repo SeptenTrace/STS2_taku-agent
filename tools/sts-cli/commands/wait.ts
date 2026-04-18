@@ -1,24 +1,44 @@
 import { POLL_INTERVAL_MS } from "../config.ts";
 import { CliError, HttpError } from "../core/errors.ts";
 import type { RequestClient } from "../core/client.ts";
-import type { ActionSurfaceResponse, CombatSummaryResponse, ContextResponse } from "../api-types.ts";
+import type { ActionSurfaceResponse, CombatSummaryResponse, ContextResponse, OverlayResponse } from "../api-types.ts";
+
+export type WaitStatus = "pending" | "matched" | "terminal";
 
 export interface WaitTraceEntry {
   poll: number;
+  status: WaitStatus;
   matched: boolean;
   reason: string;
   context: ContextResponse;
   combat?: CombatSummaryResponse;
   actions?: ActionSurfaceResponse;
+  overlay?: OverlayResponse;
+  terminalReason?: string;
 }
 
-export interface WaitResult {
+export interface WaitMatchedResult {
   condition: string;
+  status: "matched";
   matched: true;
+  terminal: false;
   context: ContextResponse;
   combat?: CombatSummaryResponse;
   trace?: WaitTraceEntry[];
 }
+
+export interface WaitTerminalResult {
+  condition: string;
+  status: "terminal";
+  matched: false;
+  terminal: true;
+  terminalReason: string;
+  context: ContextResponse;
+  overlay?: OverlayResponse;
+  trace?: WaitTraceEntry[];
+}
+
+export type WaitResult = WaitMatchedResult | WaitTerminalResult;
 
 export interface WaitOptions {
   verbose?: boolean;
@@ -34,11 +54,13 @@ interface WaitObservation {
   context: ContextResponse;
   combat: CombatSummaryResponse | null;
   actions: ActionSurfaceResponse | null;
+  overlay: OverlayResponse | null;
 }
 
 interface WaitEvaluation {
-  matched: boolean;
+  status: WaitStatus;
   reason: string;
+  terminalReason?: string;
 }
 
 const READY_STATE_PRIMARY_ACTIONS: Readonly<Record<string, readonly string[]>> = {
@@ -173,140 +195,169 @@ async function maybeReadActionSurface(client: RequestClient, context: ContextRes
   }
 }
 
+async function maybeReadOverlay(client: RequestClient, context: ContextResponse): Promise<OverlayResponse | null> {
+  if (context.stateType !== "overlay") {
+    return null;
+  }
+
+  try {
+    return await client.request<OverlayResponse>("/api/v1/overlay");
+  } catch (error) {
+    if (error instanceof HttpError && error.status === 409) {
+      return null;
+    }
+
+    throw error;
+  }
+}
+
 async function readWaitObservation(client: RequestClient, condition: string): Promise<WaitObservation> {
   const context = await client.request<ContextResponse>("/api/v1/context");
   const combat = condition === "player_turn" || condition === "enemy_turn" || condition === "player_ready" || condition === "room_ready" || condition === "run_active" || isCombatState(condition)
     ? await maybeReadCombatSummary(client, context)
     : null;
   const actions = await maybeReadActionSurface(client, context, condition);
+  const overlay = await maybeReadOverlay(client, context);
 
-  return { context, combat, actions };
+  return { context, combat, actions, overlay };
 }
 
 function buildWaitTraceEntry(poll: number, evaluation: WaitEvaluation, observation: WaitObservation): WaitTraceEntry {
   return {
     poll,
-    matched: evaluation.matched,
+    status: evaluation.status,
+    matched: evaluation.status === "matched",
     reason: evaluation.reason,
     context: observation.context,
     combat: observation.combat ?? undefined,
-    actions: observation.actions ?? undefined
+    actions: observation.actions ?? undefined,
+    overlay: observation.overlay ?? undefined,
+    terminalReason: evaluation.terminalReason
   };
 }
 
 function evaluateObservation(observation: WaitObservation, condition: string): WaitEvaluation {
+  if (observation.overlay?.isTerminal) {
+    return {
+      status: "terminal",
+      reason: "terminal_overlay",
+      terminalReason: observation.overlay.terminalReason ?? "overlay"
+    };
+  }
+
   if (!isContextStable(observation.context)) {
-    return { matched: false, reason: "context_not_stable" };
+    return { status: "pending", reason: "context_not_stable" };
   }
 
   if (condition === "player_turn") {
     if (!isCombatState(observation.context.stateType)) {
-      return { matched: false, reason: "not_in_combat" };
+      return { status: "pending", reason: "not_in_combat" };
     }
 
     return isCombatPlayerReady(observation.combat)
-      ? { matched: true, reason: "player_turn_ready" }
-      : { matched: false, reason: "combat_not_player_ready" };
+      ? { status: "matched", reason: "player_turn_ready" }
+      : { status: "pending", reason: "combat_not_player_ready" };
   }
 
   if (condition === "enemy_turn") {
     if (!isCombatState(observation.context.stateType)) {
-      return { matched: false, reason: "not_in_combat" };
+      return { status: "pending", reason: "not_in_combat" };
     }
 
     return isCombatEnemyStable(observation.combat)
-      ? { matched: true, reason: "enemy_turn_stable" }
-      : { matched: false, reason: "combat_not_enemy_stable" };
+      ? { status: "matched", reason: "enemy_turn_stable" }
+      : { status: "pending", reason: "combat_not_enemy_stable" };
   }
 
   if (condition === "player_ready") {
     if (isCombatState(observation.context.stateType)) {
       return isCombatPlayerReady(observation.combat)
-        ? { matched: true, reason: "combat_player_ready" }
-        : { matched: false, reason: "combat_not_player_ready" };
+        ? { status: "matched", reason: "combat_player_ready" }
+        : { status: "pending", reason: "combat_not_player_ready" };
     }
 
     if (!isInteractiveReadyState(observation.context.stateType)) {
-      return { matched: false, reason: "state_not_player_ready_compatible" };
+      return { status: "pending", reason: "state_not_player_ready_compatible" };
     }
 
     return hasPrimaryAction(observation.actions, observation.context.stateType)
-      ? { matched: true, reason: "interactive_player_ready" }
-      : { matched: false, reason: "missing_primary_action" };
+      ? { status: "matched", reason: "interactive_player_ready" }
+      : { status: "pending", reason: "missing_primary_action" };
   }
 
   if (condition === "room_ready") {
     if (observation.context.stateType === "menu" || observation.context.stateType === "unknown" || observation.context.stateType === "overlay") {
-      return { matched: false, reason: "not_in_actionable_room" };
+      return { status: "pending", reason: "not_in_actionable_room" };
     }
 
     if (isCombatState(observation.context.stateType)) {
       return observation.combat !== null
-        ? { matched: true, reason: "combat_room_ready" }
-        : { matched: false, reason: "combat_summary_unavailable" };
+        ? { status: "matched", reason: "combat_room_ready" }
+        : { status: "pending", reason: "combat_summary_unavailable" };
     }
 
     if (isInteractiveReadyState(observation.context.stateType)) {
       return hasPrimaryAction(observation.actions, observation.context.stateType)
-        ? { matched: true, reason: "interactive_room_ready" }
-        : { matched: false, reason: "missing_primary_action" };
+        ? { status: "matched", reason: "interactive_room_ready" }
+        : { status: "pending", reason: "missing_primary_action" };
     }
 
-    return { matched: false, reason: "state_not_room_ready_compatible" };
+    return { status: "pending", reason: "state_not_room_ready_compatible" };
   }
 
   if (condition === "run_active") {
     if (observation.context.stateType === "menu" || observation.context.stateType === "unknown" || observation.context.stateType === "overlay") {
-      return { matched: false, reason: "run_not_active" };
+      return { status: "pending", reason: "run_not_active" };
     }
 
     if (isCombatState(observation.context.stateType)) {
       return observation.combat !== null
-        ? { matched: true, reason: "combat_run_active" }
-        : { matched: false, reason: "combat_summary_unavailable" };
+        ? { status: "matched", reason: "combat_run_active" }
+        : { status: "pending", reason: "combat_summary_unavailable" };
     }
 
     if (isInteractiveReadyState(observation.context.stateType)) {
       return hasPrimaryAction(observation.actions, observation.context.stateType)
-        ? { matched: true, reason: "interactive_run_active" }
-        : { matched: false, reason: "missing_primary_action" };
+        ? { status: "matched", reason: "interactive_run_active" }
+        : { status: "pending", reason: "missing_primary_action" };
     }
 
-    return { matched: true, reason: "stable_run_active" };
+    return { status: "matched", reason: "stable_run_active" };
   }
 
   if (!contextStateTypeMatches(observation.context, condition)) {
-    return { matched: false, reason: `state_mismatch:${observation.context.stateType}` };
+    return { status: "pending", reason: `state_mismatch:${observation.context.stateType}` };
   }
 
   if (condition === "player_ready") {
-    return { matched: false, reason: "unreachable_player_ready_branch" };
+    return { status: "pending", reason: "unreachable_player_ready_branch" };
   }
 
   if (condition === "player_turn" || condition === "enemy_turn") {
-    return { matched: false, reason: "unreachable_turn_branch" };
+    return { status: "pending", reason: "unreachable_turn_branch" };
   }
 
   if (isCombatState(observation.context.stateType)) {
     return observation.combat !== null
-      ? { matched: true, reason: "combat_state_matched" }
-      : { matched: false, reason: "combat_summary_unavailable" };
+      ? { status: "matched", reason: "combat_state_matched" }
+      : { status: "pending", reason: "combat_summary_unavailable" };
   }
 
   if (isInteractiveReadyState(observation.context.stateType)) {
     return hasPrimaryAction(observation.actions, observation.context.stateType)
-      ? { matched: true, reason: "interactive_state_matched" }
-      : { matched: false, reason: "missing_primary_action" };
+      ? { status: "matched", reason: "interactive_state_matched" }
+      : { status: "pending", reason: "missing_primary_action" };
   }
 
-  return { matched: true, reason: "stable_state_matched" };
+  return { status: "matched", reason: "stable_state_matched" };
 }
 
 function buildObservationStabilityKey(observation: WaitObservation): string {
   return JSON.stringify({
     context: observation.context,
     combat: observation.combat,
-    actions: observation.actions
+    actions: observation.actions,
+    overlay: observation.overlay
   });
 }
 
@@ -335,12 +386,29 @@ export async function waitForCondition(client: RequestClient, rawCondition: stri
       trace.push(buildWaitTraceEntry(poll, evaluation, observation));
     }
 
-    if (evaluation.matched) {
+    if (evaluation.status === "terminal") {
+      const result: WaitTerminalResult = {
+        condition,
+        status: "terminal",
+        matched: false,
+        terminal: true,
+        terminalReason: evaluation.terminalReason ?? "overlay",
+        context: observation.context,
+        overlay: observation.overlay ?? undefined
+      };
+      if (options.verbose) {
+        result.trace = trace;
+      }
+
+      return result;
+    }
+
+    if (evaluation.status === "matched") {
       const stabilityKey = buildObservationStabilityKey(observation);
       if (stabilityKey === previousMatchedKey) {
-        const result: WaitResult = observation.combat === null
-          ? { condition, matched: true, context: observation.context }
-          : { condition, matched: true, context: observation.context, combat: observation.combat };
+        const result: WaitMatchedResult = observation.combat === null
+          ? { condition, status: "matched", matched: true, terminal: false, context: observation.context }
+          : { condition, status: "matched", matched: true, terminal: false, context: observation.context, combat: observation.combat };
         if (options.verbose) {
           result.trace = trace;
         }

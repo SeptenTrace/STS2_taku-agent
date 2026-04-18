@@ -45,6 +45,8 @@ test("waitForCondition resolves after a stable matching stateType", async () => 
   });
 
   const result = await waitForCondition(client, "rewards", 1);
+  assert.equal(result.status, "matched");
+  assert.equal(result.terminal, false);
   assert.equal(result.condition, "rewards");
   assert.equal(result.context.stateType, "rewards");
   assert.deepEqual(
@@ -102,6 +104,7 @@ test("waitForCondition reads combat summary for player_turn", async () => {
   });
 
   const result = await waitForCondition(client, "player_turn", 1);
+  assert.equal(result.status, "matched");
   assert.equal(result.combat?.side, "player");
   assert.deepEqual(
     client.requests.map((entry) => entry.path),
@@ -178,6 +181,7 @@ test("waitForCondition ignores stale player_turn combat snapshots with zero acti
   });
 
   const result = await waitForCondition(client, "player_turn", 1);
+  assert.equal(result.status, "matched");
   assert.equal(result.combat?.actionCount, 6);
 });
 
@@ -233,6 +237,7 @@ test("waitForCondition requires two stable matching rewards observations", async
   });
 
   const result = await waitForCondition(client, "rewards", 1);
+  assert.equal(result.status, "matched");
   assert.equal(result.context.stateType, "rewards");
   assert.deepEqual(
     client.requests.map((entry) => entry.path),
@@ -288,6 +293,7 @@ test("waitForCondition requires primary actions for player_ready map states", as
   });
 
   const result = await waitForCondition(client, "player_ready", 1);
+  assert.equal(result.status, "matched");
   assert.equal(result.context.stateType, "map");
 });
 
@@ -322,7 +328,61 @@ test("waitForCondition treats closed treasure chests as room_ready once open_tre
   });
 
   const result = await waitForCondition(client, "room_ready", 1);
+  assert.equal(result.status, "matched");
   assert.equal(result.context.stateType, "treasure");
+});
+
+test("waitForCondition returns a terminal result for game over overlays", async () => {
+  const client = new MockClient({
+    "/api/v1/context": [
+      {
+        stateType: "monster",
+        roomType: "Boss",
+        isStable: true,
+        isTransitioning: false
+      },
+      {
+        stateType: "overlay",
+        roomType: "Boss",
+        overlayType: "NGameOverScreen",
+        isStable: true,
+        isTransitioning: false
+      }
+    ],
+    "/api/v1/combat/summary": [
+      {
+        roomType: "boss",
+        round: 9,
+        side: "enemy",
+        handCount: 0,
+        enemyCount: 1,
+        incomingDamage: 0,
+        playableCards: 0,
+        potionActions: 0,
+        actionCount: 0,
+        piles: {
+          draw: 0,
+          discard: 15,
+          exhaust: 4
+        }
+      }
+    ],
+    "/api/v1/overlay": [
+      {
+        screenType: "NGameOverScreen",
+        message: "Terminal overlay: NGameOverScreen",
+        manualInterventionRequired: false,
+        isTerminal: true,
+        terminalReason: "game_over"
+      }
+    ]
+  });
+
+  const result = await waitForCondition(client, "player_turn", 1);
+  assert.equal(result.status, "terminal");
+  assert.equal(result.terminal, true);
+  assert.equal(result.terminalReason, "game_over");
+  assert.equal(result.context.stateType, "overlay");
 });
 
 test("waitForCondition supports stable combat stateType waits", async () => {
@@ -374,6 +434,7 @@ test("waitForCondition supports stable combat stateType waits", async () => {
   });
 
   const result = await waitForCondition(client, "monster", 1);
+  assert.equal(result.status, "matched");
   assert.equal(result.context.stateType, "monster");
   assert.equal(result.combat?.roomType, "monster");
 });
@@ -422,6 +483,7 @@ test("waitForCondition supports stable resumed-run waits after continue_game", a
   });
 
   const result = await waitForCondition(client, "run_active", 1);
+  assert.equal(result.status, "matched");
   assert.equal(result.context.stateType, "map");
 });
 
@@ -472,6 +534,7 @@ test("waitForCondition can include verbose trace output", async () => {
   assert.equal(result.trace?.length, 3);
   assert.equal(result.trace?.[0]?.reason, "run_not_active");
   assert.equal(result.trace?.[2]?.reason, "interactive_run_active");
+  assert.equal(result.trace?.[2]?.status, "matched");
 });
 
 test("waitForCondition supports room_ready in combat states", async () => {
@@ -527,6 +590,7 @@ test("waitForCondition supports room_ready in combat states", async () => {
   });
 
   const result = await waitForCondition(client, "room_ready", 1);
+  assert.equal(result.status, "matched");
   assert.equal(result.context.stateType, "monster");
   assert.equal(result.combat?.roomType, "monster");
 });

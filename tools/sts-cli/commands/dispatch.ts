@@ -25,6 +25,7 @@ import { StreamOutput, type Output } from "../core/output.ts";
 import { buildCombatSnapshot, buildRoomSnapshot, buildRoomSummary, claimAllSafeRewards, type RoomSnapshotDetail } from "./combo.ts";
 import { runDoctor } from "./doctor.ts";
 import { buildExecInvocation } from "./exec.ts";
+import { readLogTail, readLogsByCorrelation } from "./logs.ts";
 import { buildWaitInvocation, waitForCondition } from "./wait.ts";
 import { usage } from "../usage.ts";
 import { randomUUID } from "node:crypto";
@@ -241,6 +242,20 @@ export async function dispatch(
     case "overlay":
       await printRequest<OverlayResponse>(client, output, "/api/v1/overlay");
       return;
+    case "logs": {
+      const subcommand = (args[0] ?? "tail").toLowerCase();
+      if (subcommand === "tail") {
+        output.printJson(readLogTail(args.slice(1)));
+        return;
+      }
+
+      if (subcommand === "correlation") {
+        output.printJson(readLogsByCorrelation(args[1] ?? "", args.slice(2)));
+        return;
+      }
+
+      throw new CliError(`Unknown logs subcommand: ${subcommand}`);
+    }
     case "doctor":
       output.printJson(await runDoctor(client));
       return;

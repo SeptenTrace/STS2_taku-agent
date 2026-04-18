@@ -237,11 +237,13 @@ async function addOverlayDoctorChecks(client: RequestClient, checks: DoctorCheck
     const overlay = await client.request<OverlayResponse>("/api/v1/overlay");
     checks.push({
       name: "overlay",
-      ok: !overlay.manualInterventionRequired,
+      ok: overlay.isTerminal === true || !overlay.manualInterventionRequired,
       detail: {
         screenType: overlay.screenType,
         message: overlay.message,
-        manualInterventionRequired: overlay.manualInterventionRequired
+        manualInterventionRequired: overlay.manualInterventionRequired,
+        isTerminal: overlay.isTerminal,
+        terminalReason: overlay.terminalReason
       }
     });
   } catch (error) {

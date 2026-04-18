@@ -258,6 +258,106 @@
 - CLI `wait --verbose` trace
 - CLI `exec` 自动附带 correlation id，server 端日志可关联
 
+### 4.7 补齐终态 wait 和复盘入口
+
+基于一次完整 run 的实战复盘，当前仍有三处明显不顺手，需要作为明确后续项处理。
+
+#### 4.7.1 `wait` 需要识别终局 overlay，而不是超时
+
+当前状态: `已完成`
+
+当前问题:
+
+- 如果战斗在 `wait player_turn` 期间已经进入 `NGameOverScreen`
+- CLI 仍可能继续等 `player_turn`
+- 最终表现为 timeout，而不是明确的 terminal outcome
+
+这会让 agent 在失败或胜利场景里额外多做一次诊断读取，也让自动流程在“实际上已经结束”的状态下看起来像 wait 失败。
+
+建议:
+
+- 为 `wait player_turn` / `wait room_ready` 增加终态短路判断
+- 当上下文进入 `overlay` 且 screen type 属于 `NGameOverScreen`、胜利结算、奖励结算等终态时，直接返回 matched terminal result
+- wait 结果里显式给出 `terminal=true`、`terminalReason=game_over|victory|rewards|overlay`
+
+目标:
+
+- 把“战斗已结束”与“wait 真的超时了”区分开
+- 让 agent 无需再额外调用一次 `context` 才知道 run 已结束
+
+#### 4.7.2 增加高层日志查询命令，而不是只依赖手工 `tail`
+
+当前状态: `已完成（第一批）`
+
+当前问题:
+
+- 结构化日志已经落盘到 `action-execution.jsonl`
+- 但实际复盘时仍要手工去文件系统里 `tail`、筛时间、找相关 `correlation id`
+- 对 agent 和普通用户来说都偏低层
+
+建议补的 CLI:
+
+- `sts logs tail`
+- `sts logs recent-combat`
+- `sts logs correlation <id>`
+- `sts logs last-run`
+- 可选 `--boss-only`、`--last N`、`--json`
+
+目标:
+
+- 不要求用户知道日志目录实现细节
+- 让最近一场战斗或最近一次 run 的关键动作能直接读出来
+- 让 correlation id 真正变成可用的排查入口，而不只是埋在 jsonl 里
+
+当前已落地:
+
+- `sts logs tail`
+- `sts logs correlation <id>`
+
+#### 4.7.3 增加“复盘视图”，把执行日志和战斗事件合并成一条时间线
+
+当前状态: `待完成`
+
+当前问题:
+
+- `action-execution.jsonl` 更像执行摘要
+- `action-history.jsonl` 更像战斗事件流
+- 复盘一个回合时仍需要手工对照两份日志
+
+这在分析“为什么这一拍这么打”和“这一拍到底造成了什么实际后果”时仍然偏费劲。
+
+建议:
+
+- 增加一个合并后的 replay 视图，优先做 CLI 读取层聚合，不必先改底层日志结构
+- 每条时间线至少展示:
+- 时间
+- correlation id
+- 动作
+- 目标
+- 资源变化
+- 关键 delta facts
+- 敌我血量变化
+- 如有失败则展示 `reasonCode` 和调试快照路径
+
+建议命令形态:
+
+- `sts logs replay --last-combat`
+- `sts logs replay --correlation <id>`
+- `sts logs replay --boss-only`
+
+目标:
+
+- 一眼看出“这一拍做了什么”以及“实际发生了什么”
+- 更快定位是决策问题、执行问题，还是游戏内抽牌/状态牌导致的局面崩盘
+- 降低人工复盘成本，方便持续优化 agent 策略
+
+这次 boss 战里，日志已经足够证明这些需求是现实存在的:
+
+- 终局是先进入 `NGameOverScreen`，再由 wait 超时暴露出来
+- `action-execution.jsonl` 能看出决策链
+- `action-history.jsonl` 能看出真实掉血和伤害结算
+- 但两者仍需要人工拼接才能快速还原整段 boss 战
+
 ## 5. 建议实现顺序
 
 1. 增加动作执行总入口

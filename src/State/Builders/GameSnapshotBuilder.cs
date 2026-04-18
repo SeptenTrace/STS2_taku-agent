@@ -204,10 +204,15 @@ internal sealed class GameSnapshotBuilder
         {
             stateType = "overlay";
             contextOverlayType = overlayScreen.GetType().Name;
+            string? terminalReason = ClassifyTerminalOverlay(overlayScreen.GetType().Name);
             overlay = new OverlayStateSnapshot(
                 ScreenType: overlayScreen.GetType().Name,
-                Message: $"Unhandled overlay: {overlayScreen.GetType().Name}",
-                ManualInterventionRequired: true);
+                Message: terminalReason is null
+                    ? $"Unhandled overlay: {overlayScreen.GetType().Name}"
+                    : $"Terminal overlay: {overlayScreen.GetType().Name}",
+                ManualInterventionRequired: terminalReason is null,
+                IsTerminal: terminalReason is not null,
+                TerminalReason: terminalReason);
         }
 
         (bool isStable, bool isTransitioning) = EvaluateStateStability(
@@ -357,6 +362,23 @@ internal sealed class GameSnapshotBuilder
         }
 
         return combat.Hand.Count > 0 && combat.AvailableActions.Count > 0;
+    }
+
+    private static string? ClassifyTerminalOverlay(string screenType)
+    {
+        if (screenType.Contains("GameOver", StringComparison.OrdinalIgnoreCase))
+        {
+            return "game_over";
+        }
+
+        if (screenType.Contains("Victory", StringComparison.OrdinalIgnoreCase) ||
+            screenType.Contains("Win", StringComparison.OrdinalIgnoreCase) ||
+            screenType.Contains("Credits", StringComparison.OrdinalIgnoreCase))
+        {
+            return "victory";
+        }
+
+        return null;
     }
 
     private static RunSnapshot BuildRunSnapshot(RunState runState)
@@ -1678,10 +1700,16 @@ internal sealed class GameSnapshotBuilder
                 }
                 break;
             case "overlay":
-                goal = "An unhandled overlay is active. Query context first and fall back to full state only if blocked.";
+                goal = overlay?.IsTerminal == true
+                    ? "A terminal overlay is active. Treat the current run state as finished instead of waiting for a normal room state."
+                    : "An unhandled overlay is active. Query context first and fall back to full state only if blocked.";
                 if (overlay is not null)
                 {
                     facts.Add($"{overlay.Message} Manual intervention required: {overlay.ManualInterventionRequired}.");
+                    if (overlay.IsTerminal)
+                    {
+                        facts.Add($"Terminal reason: {overlay.TerminalReason}.");
+                    }
                 }
                 break;
             default:

@@ -375,4 +375,6 @@ export interface OverlayResponse {
   screenType: string;
   message: string;
   manualInterventionRequired: boolean;
+  isTerminal?: boolean;
+  terminalReason?: string;
 }

@@ -386,7 +386,9 @@ internal sealed record CrystalSphereItemSnapshot(
 internal sealed record OverlayStateSnapshot(
     string ScreenType,
     string Message,
-    bool ManualInterventionRequired);
+    bool ManualInterventionRequired,
+    bool IsTerminal,
+    string? TerminalReason);
 
 internal sealed record CompactObservationSnapshot(
     string StateType,

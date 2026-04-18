@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { dispatch } from "./dispatch.ts";
 import { CliError } from "../core/errors.ts";
@@ -476,6 +479,79 @@ test("dispatch card-reward skip executes skip_card_reward with its default wait"
   assert.equal((output.jsonValues[0] as { execution: { actionType: string } }).execution.actionType, "skip_card_reward");
 });
 
+test("dispatch logs tail reads the latest structured execution logs", async () => {
+  const logDir = mkdtempSync(join(tmpdir(), "sts-cli-logs-"));
+  const previousLogDir = process.env.STS_LOG_DIR;
+  process.env.STS_LOG_DIR = logDir;
+
+  try {
+    writeFileSync(join(logDir, "action-execution.jsonl"), [
+      JSON.stringify({ correlationId: "a", actionType: "play_card" }),
+      JSON.stringify({ correlationId: "b", actionType: "end_turn" }),
+      ""
+    ].join("\n"));
+
+    const client = new MockClient({});
+    const output = new MockOutput();
+
+    await dispatch(client, "logs", ["tail", "--last", "1"], output);
+
+    assert.deepEqual(output.jsonValues[0], {
+      kind: "action-execution",
+      path: join(logDir, "action-execution.jsonl"),
+      entryCount: 1,
+      entries: [
+        { correlationId: "b", actionType: "end_turn" }
+      ]
+    });
+  } finally {
+    if (previousLogDir === undefined) {
+      delete process.env.STS_LOG_DIR;
+    } else {
+      process.env.STS_LOG_DIR = previousLogDir;
+    }
+    rmSync(logDir, { recursive: true, force: true });
+  }
+});
+
+test("dispatch logs correlation filters execution logs by correlation id", async () => {
+  const logDir = mkdtempSync(join(tmpdir(), "sts-cli-logs-"));
+  const previousLogDir = process.env.STS_LOG_DIR;
+  process.env.STS_LOG_DIR = logDir;
+
+  try {
+    writeFileSync(join(logDir, "action-execution.jsonl"), [
+      JSON.stringify({ CorrelationId: "keep", ActionType: "play_card" }),
+      JSON.stringify({ CorrelationId: "drop", ActionType: "end_turn" }),
+      JSON.stringify({ CorrelationId: "keep", ActionType: "use_potion" }),
+      ""
+    ].join("\n"));
+
+    const client = new MockClient({});
+    const output = new MockOutput();
+
+    await dispatch(client, "logs", ["correlation", "keep"], output);
+
+    assert.deepEqual(output.jsonValues[0], {
+      correlationId: "keep",
+      kind: "action-execution",
+      path: join(logDir, "action-execution.jsonl"),
+      entryCount: 2,
+      entries: [
+        { CorrelationId: "keep", ActionType: "play_card" },
+        { CorrelationId: "keep", ActionType: "use_potion" }
+      ]
+    });
+  } finally {
+    if (previousLogDir === undefined) {
+      delete process.env.STS_LOG_DIR;
+    } else {
+      process.env.STS_LOG_DIR = previousLogDir;
+    }
+    rmSync(logDir, { recursive: true, force: true });
+  }
+});
+
 test("dispatch rejects unknown subcommands with CliError", async () => {
   const client = new MockClient({});
   const output = new MockOutput();
@@ -541,7 +617,9 @@ test("dispatch exec can wait for a stable follow-up condition", async () => {
     },
     wait: {
       condition: "map",
+      status: "matched",
       matched: true,
+      terminal: false,
       context: {
         stateType: "map",
         roomType: "Monster",
