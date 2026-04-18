@@ -9,6 +9,7 @@ export const usage = `Usage:
   sts delta
   sts actions
   sts run
+  sts run snapshot
   sts knowledge [current|cards|relics|potions|status]
   sts player [summary|deck|relics|potions|status]
   sts combat [summary|actions|hand|enemies|piles|snapshot]
@@ -52,6 +53,7 @@ Examples:
   sts next
   sts menu
   sts actions
+  sts run snapshot
   sts combat snapshot
   sts combat actions
   sts player summary

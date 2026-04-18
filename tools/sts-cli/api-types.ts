@@ -20,6 +20,14 @@ export interface ContextResponse {
   recommendedQueries?: string[];
 }
 
+export interface RunResponse {
+  act: number;
+  floor: number;
+  ascension?: number;
+  roomType?: string;
+  currentMapCoord?: MapCoordResponse;
+}
+
 export interface MenuResponse {
   isVisible: boolean;
   hasContinueRun: boolean;

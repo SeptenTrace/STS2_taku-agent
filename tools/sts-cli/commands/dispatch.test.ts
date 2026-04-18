@@ -393,6 +393,73 @@ test("dispatch room snapshot supports full detail reads", async () => {
   ]);
 });
 
+test("dispatch run snapshot writes the planning-friendly aggregate payload", async () => {
+  const client = new MockClient({
+    "/api/v1/context": {
+      stateType: "map",
+      roomType: "Monster",
+      isStable: true,
+      isTransitioning: false
+    },
+    "/api/v1/player/summary": {
+      characterId: "IRONCLAD",
+      character: "铁甲战士",
+      currentHp: 68,
+      maxHp: 80,
+      block: 0,
+      gold: 261,
+      deckCount: 10,
+      uniqueCards: 3,
+      upgradedCards: 0,
+      relicIds: ["BURNING_BLOOD", "GOLDEN_PEARL"],
+      potionIds: ["OROBIC_ACID"],
+      status: []
+    },
+    "/api/v1/actions": {
+      stateType: "map",
+      actions: [
+        { actionType: "choose_map_node", index: 0, label: "Node 0: Monster" }
+      ]
+    },
+    "/api/v1/map/summary": {
+      currentPosition: {
+        col: 2,
+        row: 1,
+        type: "Monster"
+      },
+      nextOptions: [],
+      boss: {
+        col: 3,
+        row: 16,
+        type: "Boss"
+      },
+      visitedCount: 2
+    },
+    "/api/v1/observation/compact": {
+      stateType: "map",
+      goal: "Choose the next map node."
+    },
+    "/api/v1/run": {
+      act: 1,
+      floor: 2,
+      ascension: 0,
+      roomType: "Monster",
+      currentMapCoord: {
+        col: 2,
+        row: 1,
+        type: "Monster"
+      }
+    }
+  });
+  const output = new MockOutput();
+
+  await dispatch(client, "run", ["snapshot"], output);
+
+  assert.equal((output.jsonValues[0] as { run: { floor: number } }).run.floor, 2);
+  assert.equal((output.jsonValues[0] as { room: { context: { stateType: string } } }).room.context.stateType, "map");
+  assert.equal((output.jsonValues[0] as { compactObservation: { goal: string } }).compactObservation.goal, "Choose the next map node.");
+});
+
 test("dispatch bundle-selection uses the typed bundle endpoint", async () => {
   const client = new MockClient({
     "/api/v1/bundle-selection": {

@@ -1,0 +1,4 @@
+interface:
+  display_name: "STS CLI Run Planning"
+  short_description: "Plan a whole STS2 run through sts"
+  default_prompt: "Use $sts-cli-run-planning to inspect the current run with sts run snapshot, form a compact strategic plan, and then hand execution to the appropriate narrower sts skill."

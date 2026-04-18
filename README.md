@@ -8,6 +8,7 @@ Starter repository for a Slay the Spire 2 mod focused on building an AI-playable
 - `docs/phase-1-api.md`: low-token API design for phase 1 observation
 - `docs/phase-2-todo.md`: action-layer TODO list for phase 2
 - `docs/phase-3-todo.md`: planning-layer TODO list for phase 3
+- `docs/phase-3-plan.md`: first implementation plan for the planning layer
 - `docs/feasibility/README.md`: feasibility assessment for the three planned phases
 
 ## Repository Layout
@@ -173,6 +174,7 @@ Local CLI:
 - `./sts wait room-ready --verbose`
 - `./sts exec proceed --wait-for map`
 - `./sts get /api/v1/state/full`
+- `./sts run snapshot`
 
 CLI implementation notes:
 - `./sts` and `bin/sts` both launch the same CLI entry at `tools/sts-cli/main.ts`
@@ -195,11 +197,13 @@ Bundled Codex skills:
 - `.codex/skills/sts-cli-combat`
 - `.codex/skills/sts-cli-room-flow`
 - `.codex/skills/sts-cli-runtime`
+- `.codex/skills/sts-cli-run-planning`
 - these are organized by operation type so agents can choose a narrower workflow instead of loading one large monolithic skill
 - install them into Codex with `./install_repo_skills.sh`
 - pass `--copy` if you want standalone copies instead of symlinks
 
 Higher-level CLI helpers:
+- `./sts run snapshot` returns the default planning view for the current run, combining `context`, `run`, `compact observation`, `room summary`, and an embedded combat snapshot when relevant
 - `./sts room summary` returns one combined snapshot for the current actionable room
 - `./sts menu` reports whether the main menu can currently resume the saved run
 - `./sts doctor` runs a lightweight end-to-end health check over ping, context, actions, and either `menu` or `room summary`
@@ -258,6 +262,11 @@ Replay-friendly logging guidance:
 - the server now emits structured action execution logs to `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/action-execution.jsonl`
 - each action log record includes timestamp, correlation id, run/floor/room context, player resources before/after, action parameters, action-surface summaries, delta facts, failure reason, and debug snapshot path
 - `sts exec ...` automatically sends a correlation id header so failed or successful writes can be traced in the server log
+
+Phase 3 bootstrap guidance:
+- start strategic planning from `sts run snapshot`
+- use `sts-cli-run-planning` as the default Codex skill for route, reward, and room-level planning
+- hand local execution back to `sts-cli-combat` or `sts-cli-room-flow` once the strategic choice is made
 - verbose `wait` traces are still the preferred tool for transition debugging and helper-flow diagnosis
 - terminal overlays such as `NGameOverScreen` now short-circuit `sts wait ...` with `status=terminal` and a machine-readable `terminalReason`
 - `sts logs tail` and `sts logs correlation <id>` now provide first-pass log access without requiring manual `tail` against the raw jsonl files
@@ -326,7 +335,7 @@ Canonical execution contract:
 
 See `docs/phase-2-todo.md` for the concrete task list.
 
-The next planning-layer work is tracked in `docs/phase-3-todo.md`.
+The next planning-layer work is tracked in `docs/phase-3-todo.md`, with the first implementation batch described in `docs/phase-3-plan.md`.
 
 ## Build For Local macOS Game
 ```bash

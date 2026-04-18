@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { buildRoomSummary, claimAllSafeRewards } from "./combo.ts";
+import { buildRoomSummary, buildRunSnapshot, claimAllSafeRewards } from "./combo.ts";
 import { MockClient } from "../test-helpers/mock-client.ts";
 
 test("claimAllSafeRewards claims non-card rewards and stops at card rewards", async () => {
@@ -102,4 +102,67 @@ test("buildRoomSummary combines context, player, actions, and state data", async
   assert.ok(result.playerSummary);
   assert.equal(result.playerSummary.characterId, "IRONCLAD");
   assert.equal(result.stateData?.kind, "rewards");
+});
+
+test("buildRunSnapshot combines planning-friendly run, room, and compact data", async () => {
+  const client = new MockClient({
+    "/api/v1/context": {
+      stateType: "map",
+      roomType: "Monster",
+      isStable: true,
+      isTransitioning: false
+    },
+    "/api/v1/player/summary": {
+      characterId: "IRONCLAD",
+      character: "铁甲战士",
+      currentHp: 68,
+      maxHp: 80,
+      block: 0,
+      gold: 261,
+      deckCount: 10,
+      uniqueCards: 3,
+      upgradedCards: 0,
+      relicIds: ["BURNING_BLOOD", "GOLDEN_PEARL"],
+      potionIds: ["OROBIC_ACID"],
+      status: []
+    },
+    "/api/v1/actions": {
+      stateType: "map",
+      actions: [
+        { actionType: "choose_map_node", index: 0, label: "Node 0: Monster" }
+      ]
+    },
+    "/api/v1/map/summary": {
+      currentPosition: { col: 2, row: 1, type: "Monster" },
+      nextOptions: [
+        {
+          index: 0,
+          col: 2,
+          row: 2,
+          type: "Monster",
+          leadsTo: [{ col: 2, row: 3, type: "Monster" }]
+        }
+      ],
+      boss: { col: 3, row: 16, type: "Boss" },
+      visitedCount: 2
+    },
+    "/api/v1/observation/compact": {
+      stateType: "map",
+      goal: "Choose the next map node."
+    },
+    "/api/v1/run": {
+      act: 1,
+      floor: 2,
+      ascension: 0,
+      roomType: "Monster",
+      currentMapCoord: { col: 2, row: 1, type: "Monster" }
+    }
+  });
+
+  const result = await buildRunSnapshot(client);
+
+  assert.equal(result.context.stateType, "map");
+  assert.equal(result.run?.floor, 2);
+  assert.equal(result.room.stateData?.kind, "map");
+  assert.equal(result.compactObservation.goal, "Choose the next map node.");
 });

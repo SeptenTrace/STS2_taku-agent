@@ -17,6 +17,7 @@ import type {
   ObservationCompactResponse,
   OverlayResponse,
   PlayerSummaryResponse,
+  RunResponse,
   RelicSelectionResponse,
   RestSiteResponse,
   RewardsResponse,
@@ -76,7 +77,15 @@ export type RoomSnapshotDetail = "standard" | "full";
 
 export interface RoomSnapshotResult extends RoomSummaryResult {
   compactObservation?: ObservationCompactResponse;
-  run?: unknown;
+  run?: RunResponse;
+  combat?: CombatSnapshotResult;
+}
+
+export interface RunSnapshotResult {
+  context: ContextResponse;
+  run?: RunResponse;
+  compactObservation: ObservationCompactResponse;
+  room: RoomSummaryResult;
   combat?: CombatSnapshotResult;
 }
 
@@ -286,13 +295,34 @@ export async function buildRoomSnapshot(
       client.request<ObservationCompactResponse>("/api/v1/observation/compact"),
       roomSummary.context.stateType === "menu"
         ? Promise.resolve(undefined)
-        : client.request("/api/v1/run")
+        : client.request<RunResponse>("/api/v1/run")
     ]);
     result.compactObservation = compactObservation;
     result.run = run;
   }
 
   if (["monster", "elite", "boss"].includes(roomSummary.context.stateType)) {
+    result.combat = await buildCombatSnapshot(client);
+  }
+
+  return result;
+}
+
+export async function buildRunSnapshot(client: RequestClient): Promise<RunSnapshotResult> {
+  const room = await buildRoomSummary(client);
+  const compactObservation = await client.request<ObservationCompactResponse>("/api/v1/observation/compact");
+
+  const result: RunSnapshotResult = {
+    context: room.context,
+    compactObservation,
+    room
+  };
+
+  if (room.context.stateType !== "menu") {
+    result.run = await client.request<RunResponse>("/api/v1/run");
+  }
+
+  if (["monster", "elite", "boss"].includes(room.context.stateType)) {
     result.combat = await buildCombatSnapshot(client);
   }
 

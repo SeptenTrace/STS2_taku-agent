@@ -14,6 +14,7 @@ import type {
   OverlayResponse,
   PingResponse,
   PlayerSummaryResponse,
+  RunResponse,
   RelicSelectionResponse,
   RewardsResponse,
   ShopResponse
@@ -22,7 +23,7 @@ import type { RequestClient } from "../core/client.ts";
 import { DEFAULT_WAIT_TIMEOUT_SECONDS } from "../config.ts";
 import { CliError } from "../core/errors.ts";
 import { StreamOutput, type Output } from "../core/output.ts";
-import { buildCombatSnapshot, buildRoomSnapshot, buildRoomSummary, claimAllSafeRewards, type RoomSnapshotDetail } from "./combo.ts";
+import { buildCombatSnapshot, buildRoomSnapshot, buildRoomSummary, buildRunSnapshot, claimAllSafeRewards, type RoomSnapshotDetail } from "./combo.ts";
 import { runDoctor } from "./doctor.ts";
 import { buildExecInvocation } from "./exec.ts";
 import { readLogTail, readLogsByCorrelation } from "./logs.ts";
@@ -168,7 +169,12 @@ export async function dispatch(
       await printRequest<ActionSurfaceResponse>(client, output, "/api/v1/actions");
       return;
     case "run":
-      await printRequest(client, output, "/api/v1/run");
+      if ((args[0] ?? "").toLowerCase() === "snapshot") {
+        output.printJson(await buildRunSnapshot(client));
+        return;
+      }
+
+      await printRequest<RunResponse>(client, output, "/api/v1/run");
       return;
     case "knowledge":
       await commandFromMap(client, output, args[0], knowledgePaths, "knowledge");
