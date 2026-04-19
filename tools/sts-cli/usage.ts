@@ -28,7 +28,7 @@ export const usage = `Usage:
   sts crystal-sphere
   sts treasure
   sts overlay
-  sts logs tail [--file action-execution|action-history] [--last N]
+  sts logs tail [--file action-execution|action-history|cli-command] [--last N]
   sts logs correlation CORRELATION_ID [--last N]
   sts doctor
   sts wait CONDITION [TIMEOUT_SECONDS] [--verbose]
@@ -64,6 +64,7 @@ Examples:
   sts relic-selection
   sts crystal-sphere
   sts logs tail --last 5
+  sts logs tail --file cli-command --last 5
   sts logs correlation 1234abcd
   sts doctor
   sts wait player_turn

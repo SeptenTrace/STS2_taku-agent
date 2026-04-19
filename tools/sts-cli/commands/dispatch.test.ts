@@ -581,6 +581,41 @@ test("dispatch logs tail reads the latest structured execution logs", async () =
   }
 });
 
+test("dispatch logs tail reads CLI command telemetry logs", async () => {
+  const logDir = mkdtempSync(join(tmpdir(), "sts-cli-logs-"));
+  const previousLogDir = process.env.STS_LOG_DIR;
+  process.env.STS_LOG_DIR = logDir;
+
+  try {
+    writeFileSync(join(logDir, "cli-command.jsonl"), [
+      JSON.stringify({ Command: "context", Outcome: "ok" }),
+      JSON.stringify({ Command: "run", Args: ["snapshot"], Outcome: "ok" }),
+      ""
+    ].join("\n"));
+
+    const client = new MockClient({});
+    const output = new MockOutput();
+
+    await dispatch(client, "logs", ["tail", "--file", "cli-command", "--last", "1"], output);
+
+    assert.deepEqual(output.jsonValues[0], {
+      kind: "cli-command",
+      path: join(logDir, "cli-command.jsonl"),
+      entryCount: 1,
+      entries: [
+        { Command: "run", Args: ["snapshot"], Outcome: "ok" }
+      ]
+    });
+  } finally {
+    if (previousLogDir === undefined) {
+      delete process.env.STS_LOG_DIR;
+    } else {
+      process.env.STS_LOG_DIR = previousLogDir;
+    }
+    rmSync(logDir, { recursive: true, force: true });
+  }
+});
+
 test("dispatch logs correlation filters execution logs by correlation id", async () => {
   const logDir = mkdtempSync(join(tmpdir(), "sts-cli-logs-"));
   const previousLogDir = process.env.STS_LOG_DIR;

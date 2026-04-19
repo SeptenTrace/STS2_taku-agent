@@ -262,6 +262,10 @@ Replay-friendly logging guidance:
 - the server now emits structured action execution logs to `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/action-execution.jsonl`
 - each action log record includes timestamp, correlation id, run/floor/room context, player resources before/after, action parameters, action-surface summaries, delta facts, failure reason, and debug snapshot path
 - `sts exec ...` automatically sends a correlation id header so failed or successful writes can be traced in the server log
+- the CLI now emits `cli-command.jsonl` in the same log directory, covering every top-level `sts ...` invocation, including read commands
+- each CLI command record includes the command name, args, cwd, base URL, duration, exit outcome, and traced HTTP request paths
+- `sts logs tail --file cli-command` reads the latest CLI telemetry without opening the raw file manually
+- set `STS_CLI_DISABLE_TELEMETRY=1` if you need to suppress CLI telemetry temporarily
 
 Phase 3 bootstrap guidance:
 - start strategic planning from `sts run snapshot`

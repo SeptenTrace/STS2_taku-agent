@@ -1,10 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 
 import { CliError } from "../core/errors.ts";
-
-type LogFileKind = "action-execution" | "action-history";
+import { resolveLogFilePath, type LogFileKind } from "../core/log-files.ts";
 
 export interface LogReadResult {
   kind: LogFileKind;
@@ -13,24 +10,7 @@ export interface LogReadResult {
   entries: unknown[];
 }
 
-interface LogReadOptions {
-  last: number;
-}
-
 const DEFAULT_TAIL_COUNT = 20;
-const LOG_FILE_PATHS: Readonly<Record<LogFileKind, string>> = {
-  "action-execution": "action-execution.jsonl",
-  "action-history": "action-history.jsonl"
-};
-
-function getLogDirectory(): string {
-  return process.env.STS_LOG_DIR
-    ?? join(homedir(), "Library", "Application Support", "STS2TakuAgent", "phase1-feasibility");
-}
-
-function resolveLogFilePath(kind: LogFileKind): string {
-  return join(getLogDirectory(), LOG_FILE_PATHS[kind]);
-}
 
 function parsePositiveInt(raw: string, flagName: string): number {
   const value = Number(raw);
@@ -66,8 +46,8 @@ export function readLogTail(args: string[]): LogReadResult {
     const arg = args[index]!;
     if (arg === "--file") {
       const next = args[index + 1];
-      if (next !== "action-execution" && next !== "action-history") {
-        throw new CliError("Usage: sts logs tail [--file action-execution|action-history] [--last N]");
+      if (next !== "action-execution" && next !== "action-history" && next !== "cli-command") {
+        throw new CliError("Usage: sts logs tail [--file action-execution|action-history|cli-command] [--last N]");
       }
 
       kind = next;
@@ -77,8 +57,8 @@ export function readLogTail(args: string[]): LogReadResult {
 
     if (arg.startsWith("--file=")) {
       const value = arg.slice("--file=".length);
-      if (value !== "action-execution" && value !== "action-history") {
-        throw new CliError("Usage: sts logs tail [--file action-execution|action-history] [--last N]");
+      if (value !== "action-execution" && value !== "action-history" && value !== "cli-command") {
+        throw new CliError("Usage: sts logs tail [--file action-execution|action-history|cli-command] [--last N]");
       }
 
       kind = value;
@@ -88,7 +68,7 @@ export function readLogTail(args: string[]): LogReadResult {
     if (arg === "--last") {
       const next = args[index + 1];
       if (!next) {
-        throw new CliError("Usage: sts logs tail [--file action-execution|action-history] [--last N]");
+        throw new CliError("Usage: sts logs tail [--file action-execution|action-history|cli-command] [--last N]");
       }
 
       last = parsePositiveInt(next, "--last");
