@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
-SRC_DIR="$REPO_ROOT/src"
-PACK_DIR="$REPO_ROOT/pack"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+MOD_SRC_DIR="$REPO_ROOT/mod/src"
+MOD_PACK_DIR="$REPO_ROOT/mod/pack"
 DIST_DIR="$REPO_ROOT/dist"
-TOOLS_DIR="$REPO_ROOT/tools"
-MANIFEST_PATH="$PACK_DIR/mod_manifest.json"
+BUILD_PCK_SCRIPT="$REPO_ROOT/scripts/release/build_pck.gd"
+MANIFEST_PATH="$MOD_PACK_DIR/mod_manifest.json"
 
 GAME_DATA_DIR="${STS2_GAME_DIR:-$HOME/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app/Contents/Resources/data_sts2_macos_arm64}"
 GAME_MODS_DIR="${STS2_MODS_DIR:-$HOME/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app/Contents/MacOS/mods}"
@@ -34,12 +35,12 @@ MOD_DEPLOY_DIR="$GAME_MODS_DIR/$MOD_ID"
 
 mkdir -p "$DIST_DIR" "$MOD_DEPLOY_DIR"
 
-STS2_GAME_DIR="$GAME_DATA_DIR" "$DOTNET_BIN" build "$SRC_DIR/TakuAgentMod.csproj" -c Release
+STS2_GAME_DIR="$GAME_DATA_DIR" "$DOTNET_BIN" build "$MOD_SRC_DIR/TakuAgentMod.csproj" -c Release
 
-"$GAME_ENGINE_BIN" --headless --script "$TOOLS_DIR/build_pck.gd" -- "$PACK_DIR" "$DIST_DIR/${MOD_ID}.pck"
+"$GAME_ENGINE_BIN" --headless --script "$BUILD_PCK_SCRIPT" -- "$MOD_PACK_DIR" "$DIST_DIR/${MOD_ID}.pck"
 
 cp -f "$DIST_DIR/${MOD_ID}.pck" "$MOD_DEPLOY_DIR/${MOD_ID}.pck"
-cp -f "$SRC_DIR/bin/Release/net9.0/${MOD_ID}.dll" "$MOD_DEPLOY_DIR/${MOD_ID}.dll"
+cp -f "$MOD_SRC_DIR/bin/Release/net9.0/${MOD_ID}.dll" "$MOD_DEPLOY_DIR/${MOD_ID}.dll"
 cp -f "$MANIFEST_PATH" "$MOD_DEPLOY_DIR/mod_manifest.json"
 
 echo "Done. Deployed to: $MOD_DEPLOY_DIR"

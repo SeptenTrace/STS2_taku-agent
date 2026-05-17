@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 SERVER_TIMEOUT_SECONDS=90
 RUN_SMOKE=0
 SKIP_BUILD=0
@@ -10,11 +11,11 @@ SKIP_RESTART=0
 usage() {
   cat <<'EOF'
 Usage:
-  ./dev_cycle.sh
-  ./dev_cycle.sh --smoke
-  ./dev_cycle.sh --server-timeout 120
-  ./dev_cycle.sh --skip-build
-  ./dev_cycle.sh --skip-restart
+  scripts/dev/dev-cycle.sh
+  scripts/dev/dev-cycle.sh --smoke
+  scripts/dev/dev-cycle.sh --server-timeout 120
+  scripts/dev/dev-cycle.sh --skip-build
+  scripts/dev/dev-cycle.sh --skip-restart
 
 Behavior:
   1. Build and deploy the mod
@@ -23,12 +24,12 @@ Behavior:
   4. Optionally run a minimal smoke check
 
 Environment:
-  STS2_APP_PATH      Forwarded to restart_game.sh
-  STS2_GAME_BIN      Forwarded to restart_game.sh
-  STS2_OBSERVER_URL  Forwarded to restart_game.sh and ./sts
-  STS2_STEAM_APP_ID  Forwarded to restart_game.sh
-  STS2_LAUNCH_DIRECT Forwarded to restart_game.sh
-  STS2_AUTO_CONTINUE Forwarded to restart_game.sh
+  STS2_APP_PATH      Forwarded to scripts/dev/restart-game.sh
+  STS2_GAME_BIN      Forwarded to scripts/dev/restart-game.sh
+  STS2_OBSERVER_URL  Forwarded to scripts/dev/restart-game.sh and ./sts
+  STS2_STEAM_APP_ID  Forwarded to scripts/dev/restart-game.sh
+  STS2_LAUNCH_DIRECT Forwarded to scripts/dev/restart-game.sh
+  STS2_AUTO_CONTINUE Forwarded to scripts/dev/restart-game.sh
 EOF
 }
 
@@ -75,12 +76,12 @@ cd "$REPO_ROOT"
 
 if [[ "$SKIP_BUILD" -eq 0 ]]; then
   echo "==> Building and deploying"
-  ./build_and_deploy.sh
+  scripts/dev/build-and-deploy.sh
 fi
 
 if [[ "$SKIP_RESTART" -eq 0 ]]; then
   echo "==> Restarting game"
-  ./restart_game.sh --wait-for-server --server-timeout "$SERVER_TIMEOUT_SECONDS"
+  scripts/dev/restart-game.sh --wait-for-server --server-timeout "$SERVER_TIMEOUT_SECONDS"
 fi
 
 if [[ "$RUN_SMOKE" -eq 1 ]]; then

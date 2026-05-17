@@ -76,7 +76,7 @@
 仓库里已经落地了一个最小可用的阶段一实现，当前代码结构为:
 
 ```text
-src/
+mod/src/
   Diagnostics/
     BattleStateCaptureService.cs
   Observation/
@@ -381,7 +381,7 @@ BattleSnapshot
 可以在当前仓库基础上先补一个面向阶段一的目录布局:
 
 ```text
-src/
+mod/src/
   ModEntry.cs
   State/
     Snapshots/

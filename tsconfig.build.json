@@ -3,22 +3,22 @@
   "compilerOptions": {
     "noEmit": false,
     "outDir": "./dist/npm",
-    "rootDir": "./tools/sts-cli",
+    "rootDir": "./cli",
     "declaration": false,
     "sourceMap": false,
     "allowImportingTsExtensions": false,
     "rewriteRelativeImportExtensions": true
   },
   "include": [
-    "tools/sts-cli/api-types.ts",
-    "tools/sts-cli/config.ts",
-    "tools/sts-cli/main.ts",
-    "tools/sts-cli/usage.ts",
-    "tools/sts-cli/commands/*.ts",
-    "tools/sts-cli/core/*.ts"
+    "cli/api-types.ts",
+    "cli/config.ts",
+    "cli/main.ts",
+    "cli/usage.ts",
+    "cli/commands/*.ts",
+    "cli/core/*.ts"
   ],
   "exclude": [
-    "tools/sts-cli/**/*.test.ts",
-    "tools/sts-cli/test-helpers/**"
+    "cli/**/*.test.ts",
+    "cli/test-helpers/**"
   ]
 }

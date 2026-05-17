@@ -12,6 +12,6 @@
     ]
   },
   "include": [
-    "tools/sts-cli/**/*.ts"
+    "cli/**/*.ts"
   ]
 }

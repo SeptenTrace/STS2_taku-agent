@@ -4,8 +4,8 @@ dist/
 release/
 node_modules/
 
-src/bin/
-src/obj/
+mod/src/bin/
+mod/src/obj/
 
 .vscode/
 *.user

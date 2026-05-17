@@ -1,392 +1,181 @@
 # STS2 Taku Agent
 
-Starter repository for a Slay the Spire 2 mod focused on building an AI-playable interface for Slay the Spire 2.
+[![CLI](https://img.shields.io/badge/CLI-Node.js%2024+-339933)](https://nodejs.org/)
+[![Mod](https://img.shields.io/badge/Mod-Slay%20the%20Spire%202-red)](#install)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-## Planning Docs
-- `docs/overall-plan.md`: project roadmap across the three major phases
-- `docs/phase-1-observer.md`: detailed plan for building the game-state observation layer
-- `docs/phase-1-api.md`: low-token API design for phase 1 observation
-- `docs/phase-2-todo.md`: action-layer TODO list for phase 2
-- `docs/phase-3-todo.md`: planning-layer TODO list for phase 3
-- `docs/phase-3-plan.md`: first implementation plan for the planning layer
-- `docs/feasibility/README.md`: feasibility assessment for the three planned phases
+STS2 Taku Agent is a Slay the Spire 2 mod and command-line tool that exposes the current game state through a local, agent-friendly interface. It is built for experiments where an AI agent reads the run, chooses legal actions, and executes them through a small `sts` CLI.
+
+This project is unofficial and is not affiliated with Mega Crit or Slay the Spire.
+
+## What It Includes
+
+- A Slay the Spire 2 mod that runs a localhost observer/control server while the game is open.
+- A cross-platform `sts` CLI for reading game state and executing actions.
+- Release packages for macOS and Windows.
+- Repo-local Codex skills for agent workflows that use the CLI.
+
+## Install
+
+Download the release artifacts from `dist/release/` or from a GitHub Release built from this repository.
+
+### 1. Install The Mod
+
+Choose the mod package for your platform:
+
+- macOS: `dist/release/mod/taku_agent-v0.1.0-macos.zip`
+- Windows: `dist/release/mod/taku_agent-v0.1.0-windows.zip`
+
+Extract the zip and copy the `taku_agent/` folder into your Slay the Spire 2 `mods` directory.
+
+Common locations:
+
+- macOS: `~/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app/Contents/MacOS/mods/`
+- Windows: `%ProgramFiles(x86)%\Steam\steamapps\common\Slay the Spire 2\mods\`
+
+The final layout should look like:
+
+```text
+mods/
+  taku_agent/
+    mod_manifest.json
+    taku_agent.dll
+    taku_agent.pck
+```
+
+### 2. Install The CLI
+
+The CLI requires Node.js 24 or newer.
+
+macOS:
+
+```bash
+unzip sts-cli-v0.1.0-macos.zip
+./install.sh
+```
+
+Windows PowerShell:
+
+```powershell
+Expand-Archive sts-cli-v0.1.0-windows.zip
+.\sts-cli-v0.1.0-windows\install.ps1
+```
+
+You can also install directly from the npm tarball:
+
+```bash
+npm install -g ./retr0-sts-cli-0.1.0.tgz
+```
+
+### 3. Verify
+
+Start Slay the Spire 2 with the mod enabled, then run:
+
+```bash
+sts doctor
+```
+
+If the game is running and the mod is loaded, the CLI should detect the local observer server.
+
+## Common Commands
+
+```bash
+sts help
+sts context
+sts actions
+sts run snapshot
+sts room snapshot --detail full
+sts exec end_turn
+sts doctor
+```
+
+By default, the CLI connects to `http://127.0.0.1:15527`. Override it with:
+
+```bash
+STS_OBSERVER_URL=http://127.0.0.1:15527 sts doctor
+```
+
+## Build From Source
+
+Requirements:
+
+- Node.js 24+
+- .NET SDK 9+
+- Slay the Spire 2 installed locally
+- `zip` and `shasum` available on the release machine
+
+Build and test the CLI:
+
+```bash
+npm install
+npm run verify:cli
+```
+
+Build all release packages:
+
+```bash
+scripts/build-release.sh
+```
+
+If your game is not in the default Steam location, provide the paths explicitly:
+
+```bash
+STS2_GAME_DIR="/path/to/slay-the-spire-2-data" \
+STS2_ENGINE_BIN="/path/to/slay-the-spire-2-executable" \
+scripts/build-release.sh
+```
+
+Release output:
+
+```text
+dist/release/
+  cli/
+    retr0-sts-cli-0.1.0.tgz
+    sts-cli-v0.1.0-macos.zip
+    sts-cli-v0.1.0-windows.zip
+  mod/
+    taku_agent-v0.1.0-macos.zip
+    taku_agent-v0.1.0-windows.zip
+```
+
+Each artifact also has a `.sha256` checksum file.
 
 ## Repository Layout
-- `src/`: C# mod source
-- `pack/`: files packaged into the `.pck`
-- `tools/`: helper scripts for packaging
-- `tools/sts-cli/`: TypeScript implementation of the repo-local CLI
-- `bin/sts`: npm-packaged executable entry for the global `sts` command
-- `build_and_deploy.sh`: build locally and copy outputs into the game `mods` folder
-- `restart_game.sh`: stop and relaunch the local macOS game client, optionally waiting for the observer server
-- `dev_cycle.sh`: build, deploy, restart, wait for the observer server, and optionally run smoke checks
-- `build_release.sh`: build a shareable release package
-- `.codex/skills/`: repo-local Codex skills for using the `sts` CLI in phase 3 workflows
-- `install_repo_skills.sh`: link or copy the repo-local `sts` skills into the active Codex skills directory
 
-## Current Status
-Phase 1 is complete as the observation layer, and Phase 2 is now implemented and validated in live gameplay on top of the same low-token contract.
-
-The repository includes a working runtime capture pipeline, a low-token localhost observation server, a repo-local CLI, semantic action surfaces, incremental delta reads, a current-context knowledge cache, and a Phase 2 execution endpoint that returns linked observation deltas plus recovery guidance.
-
-Recent reliability work also added:
-
-- stable-vs-transitioning state signals on `context`
-- stricter action hiding during transient or non-actionable frames
-- a repo-local wait primitive and `exec --wait-for ...` follow-up flow
-
-## Current Design
-
-Phase 1 currently follows a `CLI + server + layered observation` design:
-
-- `server`
-  The mod exposes a localhost read-only observation server.
-- `cli`
-  The repository provides `./sts` as a stable local command surface on top of the server.
-- `layered observation`
-  The default query path is `context -> compact observation -> narrow endpoint`, not `full state`.
-
-This is intentionally optimized for agent usage rather than for generic debugging.
-
-## Reference And Direction
-
-`STS2MCP` is currently our best reference source for:
-
-- Hook discovery
-- Global `stateType` classification
-- Room / overlay aware state building
-- Practical runtime object access patterns
-
-But `STS2_taku-agent` has a more ambitious goal in one specific direction:
-
-- reduce token consumption as aggressively as possible
-
-So the design target here is not only:
-
-- can the mod read the game state
-
-but also:
-
-- can an agent query only the state it actually needs
-- can it avoid repeated long text and repeated full-state reads
-- can it make a decision with the fewest possible tokens and round trips
-
-In short:
-
-- learn state coverage from `STS2MCP`
-- but build a more opinionated low-token observation layer on top
-- then use that observation layer as the foundation for later action APIs
-
-## Completed In Phase 1
-
-Currently completed:
-
-- Battle snapshot capture on `combat_setup`
-- Battle snapshot capture on `after_player_turn_start`
-- Battle snapshot capture on `after_card_played`
-- Action history logging for played cards
-- Runtime JSON snapshot export for validation
-- Local observation server on `localhost:15527`
-- Global `context` classification endpoint
-- `compact observation` endpoint for minimal decision context
-- `delta observation` endpoint for incremental post-action reads
-- generic `actions` endpoint for the current screen
-- `actions/execute` write endpoint that reuses the same action names and parameter contract
-- `knowledge/current` endpoint that separates current-context card / relic / potion / status knowledge from dynamic state
-- Fine-grained read-only endpoints for combat, player, map, rewards, event, shop, rest-site, treasure, and card selection
-- `combat/actions` endpoint exposing legal card actions, potion actions, legal target sets, and semantic summaries
-- Lightweight `player/summary` endpoint without full deck payload
-- Structured combat summary with `incomingDamage`, `playableCards`, potion action count, and total action count
-- Repo-local `./sts` CLI wrapper over the observation server
-- Phase 2 execution endpoint for combat, map, rewards, shop, rest-site, treasure, and card selection actions
-
-Currently verified fields:
-- Player role / character type
-- Player HP, max HP, block, energy, max energy, stars
-- Player status effects with title, amount, description, and category
-- Enemy HP, max HP, block, alive/hittable state, buffs/debuffs, and current intent summary
-- Hand, draw pile, discard pile, and exhaust pile contents
-- Card title, description, type, rarity, target type, resolved energy cost, X-cost flag, star cost, upgrade state, and keywords
-- Potion title, usage, target type, rarity, and effect description
-- Relic title, rarity, counter, and effect description
-
-Current capture triggers:
-- `combat_setup`
-- `after_player_turn_start`
-- `after_card_played`
-
-Snapshot output path on macOS:
-- `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/`
-
-Action history output:
-- `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/action-history.jsonl`
-
-Observation server:
-- `http://localhost:15527/`
-- `http://localhost:15527/api/v1/capabilities`
-- `http://localhost:15527/api/v1/context`
-- `http://localhost:15527/api/v1/menu`
-- `http://localhost:15527/api/v1/observation/compact`
-- `http://localhost:15527/api/v1/observation/delta`
-- `http://localhost:15527/api/v1/actions`
-- `http://localhost:15527/api/v1/actions/execute`
-- `http://localhost:15527/api/v1/knowledge/current`
-- `http://localhost:15527/api/v1/combat/actions`
-- `http://localhost:15527/api/v1/fake-merchant`
-- `http://localhost:15527/api/v1/bundle-selection`
-- `http://localhost:15527/api/v1/relic-selection`
-- `http://localhost:15527/api/v1/crystal-sphere`
-- `http://localhost:15527/api/v1/overlay`
-
-`/api/v1/context` now includes:
-- `stateType`
-- `roomType`
-- `overlayType`
-- `isStable`
-- `isTransitioning`
-- `recommendedQueries`
-
-`isStable=true` means the current screen is ready for agent decisions.
-`isTransitioning=true` means the mod is intentionally treating the current frame as an in-between state, and `/api/v1/actions` may be empty until the room settles.
-
-Local CLI:
-- `./sts ping`
-- `./sts context`
-- `./sts menu`
-- `./sts next`
-- `./sts delta`
-- `./sts actions`
-- `./sts exec play_card 0 jaw_worm_0`
-- `./sts exec select_card 1`
-- `./sts exec end_turn`
-- `./sts combat actions`
-- `./sts player summary`
-- `./sts knowledge current`
-- `./sts fake-merchant`
-- `./sts bundle-selection`
-- `./sts relic-selection`
-- `./sts crystal-sphere`
-- `./sts overlay`
-- `./sts doctor`
-- `./sts exec continue_game`
-- `./sts wait run-active`
-- `./sts wait player-ready`
-- `./sts wait room-ready --verbose`
-- `./sts exec proceed --wait-for map`
-- `./sts get /api/v1/state/full`
-- `./sts run snapshot`
-
-CLI implementation notes:
-- `./sts` and `bin/sts` both launch the same CLI entry at `tools/sts-cli/main.ts`
-- the CLI uses Node's built-in TypeScript stripping on Node 24+
-- run `npm run check` to type-check the CLI implementation
-- run `npm run test:cli` to execute the CLI unit tests with Node's built-in test runner
-- run `npm run verify:cli` to run both type-checking and the CLI test suite
-- run `npm run pack:cli` to inspect the npm package payload
-- `tools/sts-cli/core/` contains shared runtime pieces such as HTTP, JSON handling, errors, and output
-- `tools/sts-cli/commands/` contains command-specific logic such as `exec` payload building and `wait`
-
-Global npm package:
-- package name: `@retr0/sts-cli`
-- install from this checkout: `npm install -g .`
-- install from a packed tarball: `npm pack && npm install -g ./retr0-sts-cli-0.1.0.tgz`
-- after installation, use `sts help` from any directory
-
-Bundled Codex skills:
-- `.codex/skills/sts-cli-observe`
-- `.codex/skills/sts-cli-combat`
-- `.codex/skills/sts-cli-room-flow`
-- `.codex/skills/sts-cli-runtime`
-- `.codex/skills/sts-cli-run-planning`
-- these are organized by operation type so agents can choose a narrower workflow instead of loading one large monolithic skill
-- install them into Codex with `./install_repo_skills.sh`
-- pass `--copy` if you want standalone copies instead of symlinks
-
-Higher-level CLI helpers:
-- `./sts run snapshot` returns the default planning view for the current run, combining `context`, `run`, `compact observation`, `room summary`, and an embedded combat snapshot when relevant
-- `./sts room summary` returns one combined snapshot for the current actionable room
-- `./sts menu` reports whether the main menu can currently resume the saved run
-- `./sts doctor` runs a lightweight end-to-end health check over ping, context, actions, and either `menu` or `room summary`
-- `./sts doctor` also checks whether the local game process is visible and whether TCP port `15527` is listening
-- `./sts wait ... --verbose` includes poll-by-poll trace data so timeout diagnosis does not rely on the final context alone
-- `./sts exec ... --wait-for-ready|--wait-for-room|--wait-for-run` exposes higher-level wait aliases for common follow-up states
-- `./sts exec` now infers built-in default waits for a few high-confidence transition actions such as `continue_game`, `end_turn`, `choose_map_node`, `proceed`, `skip_card_reward`, and `crystal_sphere_proceed`
-- `./sts wait run-active` waits for the game to leave the main menu and settle into a stable in-run state
-- `./sts wait player-ready` waits for a stable player-actionable state or player combat turn
-- `./sts wait rewards` / `./sts wait map` / `./sts wait monster` wait for a stable matching room state, not just a one-frame context match
-- `./sts exec ACTION ... --wait-for CONDITION` executes an action and then blocks until the requested stable follow-up state is reached
-- `./sts rewards claim-all-safe` automatically claims deterministic non-card rewards and stops before card choice
-
-Local development helpers:
-- `./restart_game.sh --wait-for-server` restarts the game, waits for the observer server, and auto-resumes the saved run when the main menu exposes `continue_game`
-- `./dev_cycle.sh` runs the full build -> deploy -> restart -> wait loop, including the same auto-continue behavior
-- `./dev_cycle.sh --smoke` adds a basic `./sts ping`, `./sts context`, `./sts actions`, and `./sts doctor` verification pass after restart
-- set `STS2_AUTO_CONTINUE=0` or pass `--no-auto-continue` to leave the game on the main menu after restart
-
-Transition handling:
-- `./sts context` is the first place to check whether a screen is actionable
-- if `isTransitioning=true`, treat the current frame as non-actionable and wait
-- `/api/v1/actions` is intentionally empty during known transient states so agents do not fire against half-settled UI
-- when `stateType=menu`, `/api/v1/menu` tells you whether `/api/v1/actions` should expose `continue_game`
-
-Treasure handling:
-- unopened treasure rooms now report `stateType=treasure` with `isStable=true`
-- `/api/v1/treasure` exposes `canOpenChest=true` before relics are visible
-- `/api/v1/actions` exposes `open_treasure`, so `wait room-ready` no longer waits forever on closed chests
-- after `open_treasure`, the default CLI wait target is `treasure`, which lets the relic-selection surface settle before the next read
-
-Current low-token combat flow:
-- `context` -> current scene classification
-- `compact observation` -> minimal decision facts
-- `combat/summary` -> round, pile counts, incoming damage
-- `actions` -> current-screen legal actions with parameters and semantic hints
-- `combat/enemies` -> target and threat details only when needed
-- `knowledge/current` -> current card / relic / potion / status text cache only when ids need expansion
-- `delta observation` -> use after actions to avoid re-reading unchanged sections
-
-Recommended execution flow:
-- `context` -> confirm `isStable=true`
-- `actions` -> pick one legal action
-- `exec ...` -> execute and use the built-in default wait when one exists, or pass `--wait-for ...` explicitly when you need a different follow-up state
-- `delta observation` or `room summary` -> inspect the new stable state
-- if a restart lands on the main menu, `exec continue_game` already defaults to waiting for `run_active`
-
-CLI aggregation guidance:
-- the current fine-grained endpoints are useful as low-level building blocks, but combat reads are still too fragmented for practical agent play
-- `./sts combat snapshot` now combines `context`, `player summary`, `actions`, `combat summary`, `combat/actions`, `combat/hand`, and `combat/enemies`
-- `./sts room snapshot --detail full` combines `room summary` with `compact observation`, `run`, and an embedded combat snapshot when the current room is combat
-- deterministic room-flow actions are good candidates for higher-level helpers, but combat multi-play helpers are not safe if they only replay stale card indexes
-- before adding scripted multi-card combat commands, the executor should either re-read the action surface between steps or use a stable per-card hand identity
-
-Replay-friendly logging guidance:
-- the server now emits structured action execution logs to `~/Library/Application Support/STS2TakuAgent/phase1-feasibility/action-execution.jsonl`
-- each action log record includes timestamp, correlation id, run/floor/room context, player resources before/after, action parameters, action-surface summaries, delta facts, failure reason, and debug snapshot path
-- `sts exec ...` automatically sends a correlation id header so failed or successful writes can be traced in the server log
-- the CLI now emits `cli-command.jsonl` in the same log directory, covering every top-level `sts ...` invocation, including read commands
-- each CLI command record includes the command name, args, cwd, base URL, duration, exit outcome, and traced HTTP request paths
-- `sts logs tail --file cli-command` reads the latest CLI telemetry without opening the raw file manually
-- set `STS_CLI_DISABLE_TELEMETRY=1` if you need to suppress CLI telemetry temporarily
-
-Phase 3 bootstrap guidance:
-- start strategic planning from `sts run snapshot`
-- use `sts-cli-run-planning` as the default Codex skill for route, reward, and room-level planning
-- hand local execution back to `sts-cli-combat` or `sts-cli-room-flow` once the strategic choice is made
-- verbose `wait` traces are still the preferred tool for transition debugging and helper-flow diagnosis
-- terminal overlays such as `NGameOverScreen` now short-circuit `sts wait ...` with `status=terminal` and a machine-readable `terminalReason`
-- `sts logs tail` and `sts logs correlation <id>` now provide first-pass log access without requiring manual `tail` against the raw jsonl files
-- a remaining gap is a replay-oriented merged timeline view on top of `action-execution.jsonl` and `action-history.jsonl`
-
-The server is intentionally split into small read-only endpoints so an agent can query only the state it needs instead of re-reading a full run snapshot every time.
-
-## Phase 2 Start
-
-With Phase 1 closed, the next work moves to Phase 2 action execution:
-
-- executable action APIs for combat, map, rewards, shop, rest-site, event, and selection screens
-- legality checks and recovery around screen transitions and target invalidation
-- multi-step interaction handling for targeted cards, card selection, relic selection, and proceed flows
-- action result logging linked to observation deltas
-
-Current implemented Phase 2 surface:
-
-- `play_card`
-- `use_potion`
-- `discard_potion`
-- `end_turn`
-- `choose_map_node`
-- `choose_event_option`
-- `advance_dialogue`
-- `choose_rest_option`
-- `shop_purchase`
-- `claim_reward`
-- `select_card_reward`
-- `skip_card_reward`
-- `proceed`
-- `select_card`
-- `confirm_selection`
-- `cancel_selection`
-- `skip_selection`
-- `select_bundle`
-- `confirm_bundle_selection`
-- `cancel_bundle_selection`
-- `select_relic`
-- `skip_relic_selection`
-- `crystal_sphere_set_tool`
-- `crystal_sphere_click_cell`
-- `crystal_sphere_proceed`
-- `open_treasure`
-- `claim_treasure_relic`
-
-Validated in live play:
-
-- full combat turn execution across multiple turns
-- reward claiming
-- card reward selection
-- map node selection
-- stable `wait` handling across combat turns and room transitions
-- `exec --wait-for` returning a settled follow-up state after transient frames
-
-Canonical execution contract:
-
-- request shape: `action` + optional `index` + optional `target`
-- combat target selection uses `target`
-- every indexed action now accepts the same canonical `index`
-- legacy aliases like `card_index`, `slot`, `reward_index`, and `relic_index` are still accepted for compatibility
-- combat card `index` values are only safe for the current action surface snapshot; after any card is played, agents should treat previous indexes as stale
-- in practice, combat agents should re-read `actions` or `combat hand` after each played card instead of queueing multiple plays from one stale snapshot
-- `play_card` now also accepts optional guards such as `expected_card_id`, `expected_title`, and `expected_cost`; when they do not match the current hand slot, execution fails instead of misplaying a stale index
-- a safer long-term contract would still expose a stable per-card hand instance id
-
-See `docs/phase-2-todo.md` for the concrete task list.
-
-The next planning-layer work is tracked in `docs/phase-3-todo.md`, with the first implementation batch described in `docs/phase-3-plan.md`.
-
-## Build For Local macOS Game
-```bash
-./build_and_deploy.sh
+```text
+cli/                 TypeScript source for the sts command
+mod/src/             C# mod source
+mod/pack/            Files packed into the mod PCK
+scripts/build-release.sh
+scripts/dev/         Local development helpers
+scripts/release/     Release packaging helpers
+docs/                Design notes and older phase plans
+.codex/skills/       Optional Codex skills for agent workflows
 ```
 
-This deploys the mod into `mods/taku_agent/` with:
-- `mod_manifest.json`
-- `taku_agent.pck`
-- `taku_agent.dll`
+## Development
 
-## Restart Local Game
+Run the CLI from the repo without installing it globally:
+
 ```bash
-./restart_game.sh --wait-for-server
+./sts help
+./sts doctor
 ```
 
-Useful options:
-- `--server-timeout 120`
-- `--no-force-kill`
+Build, deploy, and restart the local macOS Steam game during development:
 
-Environment overrides:
-- `STS2_APP_PATH`
-- `STS2_GAME_BIN`
-- `STS_OBSERVER_URL`
-- `STS2_STEAM_APP_ID`
-- `STS2_LAUNCH_DIRECT=1`
-
-By default `restart_game.sh` launches the game through Steam with `steam://run/2868840`, which avoids Steam session and ownership errors that can happen when opening the `.app` bundle directly.
-
-## Full Development Cycle
 ```bash
-./dev_cycle.sh
+scripts/dev/build-and-deploy.sh
+scripts/dev/restart-game.sh --wait-for-server
+scripts/dev/dev-cycle.sh --smoke
 ```
 
-Optional smoke run:
-```bash
-./dev_cycle.sh --smoke
-```
+The development scripts use environment variables for local paths and do not require committing machine-specific configuration.
 
-Useful options:
-- `--server-timeout 120`
-- `--skip-build`
-- `--skip-restart`
+## Local Data
 
-## Build Release Package
-```bash
-./build_release.sh
-```
+The mod and CLI write local diagnostic logs under the user profile. These logs are for local debugging only and are not sent anywhere by this project. Set `STS_CLI_DISABLE_TELEMETRY=1` to disable CLI command telemetry logs.
 
-The project is scaffolded from the working structure used in `deadly_nuke_mod/`, but starts with a minimal empty mod initializer so you can add cards, patches, relics, or events incrementally.
+## License
+
+MIT. See [LICENSE](LICENSE).

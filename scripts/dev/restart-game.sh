@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 STS2_APP_PATH="${STS2_APP_PATH:-$HOME/Library/Application Support/Steam/steamapps/common/Slay the Spire 2/SlayTheSpire2.app}"
 STS2_GAME_BIN="${STS2_GAME_BIN:-$STS2_APP_PATH/Contents/MacOS/Slay the Spire 2}"
 STS_OBSERVER_URL="${STS_OBSERVER_URL:-http://127.0.0.1:15527}"
@@ -17,11 +18,11 @@ FORCE_KILL=1
 usage() {
   cat <<'EOF'
 Usage:
-  ./restart_game.sh
-  ./restart_game.sh --wait-for-server
-  ./restart_game.sh --wait-for-server --server-timeout 120
-  ./restart_game.sh --no-auto-continue
-  ./restart_game.sh --no-force-kill
+  scripts/dev/restart-game.sh
+  scripts/dev/restart-game.sh --wait-for-server
+  scripts/dev/restart-game.sh --wait-for-server --server-timeout 120
+  scripts/dev/restart-game.sh --no-auto-continue
+  scripts/dev/restart-game.sh --no-force-kill
 
 Environment:
   STS2_APP_PATH      Override the Slay the Spire 2 app bundle path.

@@ -4,23 +4,25 @@
   "description": "Global CLI for interacting with the local STS2 Taku Agent observer server.",
   "type": "module",
   "bin": {
-    "sts": "./bin/sts"
+    "sts": "./bin/sts.js"
   },
   "files": [
     "bin/",
     "dist/npm/",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=24"
   },
   "scripts": {
-    "sts": "node --experimental-strip-types tools/sts-cli/main.ts",
+    "sts": "node --experimental-strip-types cli/main.ts",
     "build:cli": "tsc -p tsconfig.build.json",
     "check": "tsc --noEmit -p tsconfig.json",
-    "test:cli": "STS_CLI_TEST=1 node --experimental-strip-types --test tools/sts-cli/**/*.test.ts",
+    "test:cli": "STS_CLI_TEST=1 node --experimental-strip-types --test cli/**/*.test.ts",
     "verify:cli": "npm run check && npm run test:cli",
     "pack:cli": "npm run build:cli && npm pack --dry-run",
+    "build:release": "scripts/build-release.sh",
     "prepack": "npm run build:cli"
   },
   "keywords": [
