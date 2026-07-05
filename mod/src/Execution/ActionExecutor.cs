@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Reflection;
 using Godot;
 using MegaCrit.Sts2.Core.Combat;
 using MegaCrit.Sts2.Core.Commands;
@@ -140,7 +141,7 @@ internal static class ActionExecutor
             return ActionExecutionOutcome.Fail("Combat is not active.");
         }
 
-        if (!CombatManager.Instance.IsPlayPhase)
+        if (!IsPlayerPlayPhase(player))
         {
             return ActionExecutionOutcome.Fail("Not in player play phase.");
         }
@@ -208,7 +209,7 @@ internal static class ActionExecutor
                 return ActionExecutionOutcome.Fail("Card requires a target. Provide 'target'.");
             }
 
-            CombatState? combatState = player.Creature.CombatState;
+            CombatState? combatState = GetCombatState(player);
             if (combatState is null)
             {
                 return ActionExecutionOutcome.Fail("Combat state is unavailable for target resolution.");
@@ -272,7 +273,7 @@ internal static class ActionExecutor
                 return ActionExecutionOutcome.Fail($"Potion '{ObservationText.SafeGetText(() => potion.Title) ?? potion.Id.Entry}' can only be used in combat.");
             }
 
-            if (!CombatManager.Instance.IsPlayPhase)
+            if (!IsPlayerPlayPhase(player))
             {
                 return ActionExecutionOutcome.Fail("Cannot use potions outside the player play phase.");
             }
@@ -343,7 +344,7 @@ internal static class ActionExecutor
             return ActionExecutionOutcome.Fail("Combat is not active.");
         }
 
-        if (!CombatManager.Instance.IsPlayPhase)
+        if (!IsPlayerPlayPhase(player))
         {
             return ActionExecutionOutcome.Fail("Not in player play phase.");
         }
@@ -487,7 +488,7 @@ internal static class ActionExecutor
                 merchantUi.OpenInventory();
             }
 
-            inventory = merchantRoom.Inventory;
+            inventory = merchantRoom.GetLocalInventory();
         }
         else if (player.RunState.CurrentRoom is EventRoom eventRoom &&
                  eventRoom.CanonicalEvent is FakeMerchant &&
@@ -722,7 +723,21 @@ internal static class ActionExecutor
 
             NGridCardHolder holder = holders[cardIndex];
             string title = ObservationText.SafeGetText(() => holder.CardModel?.Title) ?? "unknown";
-            grid.EmitSignal(NCardGrid.SignalName.HolderPressed, holder);
+            CardModel? selectedCard = GetCardGridSelectionModel(gridSelectionScreen, cardIndex) ?? holder.CardModel;
+            if (selectedCard is null)
+            {
+                return ActionExecutionOutcome.Fail($"Card at index {cardIndex} has no model.");
+            }
+
+            MethodInfo? onCardClicked = gridSelectionScreen.GetType().GetMethod(
+                "OnCardClicked",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            if (onCardClicked is null)
+            {
+                return ActionExecutionOutcome.Fail("Card grid selection screen does not expose OnCardClicked.");
+            }
+
+            onCardClicked.Invoke(gridSelectionScreen, [selectedCard]);
             return ActionExecutionOutcome.Ok($"Toggled card selection for '{title}'.");
         }
 
@@ -1101,8 +1116,36 @@ internal static class ActionExecutor
             return null;
         }
 
-        CombatState? combatState = player.Creature.CombatState;
+        CombatState? combatState = GetCombatState(player);
         return combatState is null ? null : ResolveTarget(combatState, targetId);
+    }
+
+    private static bool IsPlayerPlayPhase(Player player)
+    {
+        return CombatManager.Instance.IsPartOfPlayerTurn(player) &&
+               player.PlayerCombatState?.Phase == PlayerTurnPhase.Play;
+    }
+
+    private static CardModel? GetCardGridSelectionModel(NCardGridSelectionScreen screen, int cardIndex)
+    {
+        Type? type = screen.GetType();
+        while (type is not null)
+        {
+            FieldInfo? cardsField = type.GetField("_cards", BindingFlags.Instance | BindingFlags.NonPublic);
+            if (cardsField?.GetValue(screen) is IReadOnlyList<CardModel> cards)
+            {
+                return cardIndex >= 0 && cardIndex < cards.Count ? cards[cardIndex] : null;
+            }
+
+            type = type.BaseType;
+        }
+
+        return null;
+    }
+
+    private static CombatState? GetCombatState(Player player)
+    {
+        return player.Creature.CombatState as CombatState ?? CombatManager.Instance.DebugOnlyGetState();
     }
 
     private static Creature? ResolveTarget(CombatState combatState, string entityId)

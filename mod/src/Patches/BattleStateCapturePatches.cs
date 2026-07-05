@@ -30,7 +30,7 @@ internal static class BattleStateCapturePatches
     {
         await originalTask.ConfigureAwait(false);
 
-        CombatState? state = player.Creature?.CombatState ?? CombatManager.Instance?.DebugOnlyGetState();
+        CombatState? state = player.Creature?.CombatState as CombatState ?? CombatManager.Instance?.DebugOnlyGetState();
         BattleStateCaptureService.CaptureSnapshot("after_player_turn_start", state, player);
     }
 

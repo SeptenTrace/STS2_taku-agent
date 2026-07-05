@@ -732,7 +732,7 @@ internal sealed class GameSnapshotBuilder
         }
 
         if (!CombatManager.Instance.IsInProgress ||
-            !CombatManager.Instance.IsPlayPhase ||
+            player.PlayerCombatState?.Phase != PlayerTurnPhase.Play ||
             CombatManager.Instance.PlayerActionsDisabled ||
             !player.Creature.IsAlive)
         {
@@ -1317,7 +1317,7 @@ internal sealed class GameSnapshotBuilder
     private static ShopStateSnapshot BuildShopState(MerchantRoom merchantRoom)
     {
         var items = new List<ShopItemEntrySnapshot>();
-        MerchantInventory? inventory = merchantRoom.Inventory;
+        MerchantInventory? inventory = merchantRoom.GetLocalInventory();
         if (inventory is not null)
         {
             int index = 0;
